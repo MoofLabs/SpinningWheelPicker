@@ -38,6 +38,12 @@
       background:#fbbf24; padding:12px 18px; border-radius:10px; 
       font-weight:800; font-size:18px; margin-top:12px; display:inline-block; 
     }
+    .names-container {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 15px;
+  padding-right: 5px;
+}
   </style>
 </head>
 <body>
@@ -70,7 +76,7 @@
 
     function renderNamesConfig(){
       const rows=names.map((nm,i)=>`<div><label>Segment ${i+1}</label><input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" /></div>`).join('');
-      app.innerHTML=`<h1>Enter Names</h1>${rows}<button id="createWheel" class="btn btn-primary">Create Wheel</button><button id="backBtn" class="btn btn-gray">Back</button>`;
+      app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="createWheel" class="btn btn-primary">Create Wheel</button><button id="backBtn" class="btn btn-gray">Back</button>`;
       const inputs=document.querySelectorAll('.name-input');
       inputs.forEach(el=>{el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim();});
       inputs.forEach(el=>{
