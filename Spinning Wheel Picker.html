@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Spinning Wheel Picker (Fixed Winner)</title>
+  <title>Spinning Wheel Picker</title>
   <style>
     :root {
       --bg1: #6b21a8;
@@ -21,14 +21,23 @@
     }
     h1 { text-align:center; margin:0 0 16px 0; }
     label { display:block; font-weight:600; margin-bottom:6px; }
-    input[type="number"],input[type="text"]{width:100%;padding:10px;border-radius:8px;border:2px solid #e5e7eb;margin-bottom:10px;box-sizing:border-box;}
-    input:focus{border-color:#7c3aed;outline:none;}
-    .btn{display:inline-block;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:14px;}
-    .btn:hover{opacity:0.9;}
+    input[type="number"], input[type="text"] {
+      width:100%; padding:10px; border-radius:8px; border:2px solid #e5e7eb; 
+      margin-bottom:10px; box-sizing:border-box; font-size:16px;
+    }
+    input:focus { border-color: #7c3aed; outline:none; }
+    .btn { 
+      display:inline-block; padding:10px 18px; border-radius:8px; border:none; 
+      cursor:pointer; font-weight:700; font-size:14px; 
+    }
+    .btn:hover { opacity:0.9; }
     .btn-primary { background:#7c3aed; color:white; }
     .btn-green { background:#16a34a; color:white; }
     .btn-gray { background:#4b5563; color:white; }
-    .winner { background:#fbbf24; padding:12px 18px; border-radius:10px; font-weight:800; font-size:18px; margin-top:12px; display:inline-block; }
+    .winner { 
+      background:#fbbf24; padding:12px 18px; border-radius:10px; 
+      font-weight:800; font-size:18px; margin-top:12px; display:inline-block; 
+    }
   </style>
 </head>
 <body>
@@ -49,12 +58,12 @@
     }
 
     function renderNumSegments(){
-      app.innerHTML='<h1>Spinning Wheel Picker</h1><label>How many segments? (2–20)</label><input id="numSegmentsInput" type="number" min="2" max="20" placeholder="Enter a number" /><button id="numNext" class="btn btn-primary">Next</button>';
+      app.innerHTML='<h1>Spinning Wheel Picker</h1><label>How many segments? (2-20)</label><input id="numSegmentsInput" type="number" min="2" max="20" placeholder="Enter a number" /><button id="numNext" class="btn btn-primary">Next</button>';
       const input=document.getElementById('numSegmentsInput');
       input.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('numNext').click();});
       document.getElementById('numNext').onclick=()=>{
         const n=parseInt(input.value);
-        if(!Number.isInteger(n)||n<2||n>20)return alert('Enter 2–20');
+        if(!Number.isInteger(n)||n<2||n>20)return alert('Enter 2-20');
         names=Array(n).fill(''); isConfiguring=true; render();
       };
     }
@@ -63,8 +72,7 @@
       const rows=names.map((nm,i)=>`<div><label>Segment ${i+1}</label><input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" /></div>`).join('');
       app.innerHTML=`<h1>Enter Names</h1>${rows}<button id="createWheel" class="btn btn-primary">Create Wheel</button><button id="backBtn" class="btn btn-gray">Back</button>`;
       const inputs=document.querySelectorAll('.name-input');
-      inputs.forEach(el=>{el.oninput = e => names[+e.target.dataset.idx] = e.target.value.trim();});
-      // Enter key: if all fields filled, create wheel
+      inputs.forEach(el=>{el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim();});
       inputs.forEach(el=>{
         el.addEventListener('keydown',e=>{
           if(e.key==='Enter'){
@@ -90,7 +98,6 @@
       canvas=document.getElementById('wheelCanvas'); ctx=canvas.getContext('2d'); drawWheel();
       document.getElementById('toggleSpin').onclick=()=>{toggleSpin(); updateButton();};
       document.getElementById('reconfigure').onclick=()=>{cancelAnim(); names=[];render();};
-      // spacebar toggle
       window.onkeydown = (e) => {
         if (e.code === 'Space' && !isConfiguring) {
           e.preventDefault();
@@ -119,7 +126,6 @@
         ctx.font=`bold ${Math.floor(r*0.08)}px Arial`; ctx.translate(r*0.6,0);
         wrapText(ctx,name,0,0,r*0.3); ctx.restore();
       }); ctx.restore();
-      // draw pointer at top
       ctx.beginPath(); ctx.moveTo(cx,10); ctx.lineTo(cx-12,40); ctx.lineTo(cx+12,40); ctx.closePath(); ctx.fillStyle='#333'; ctx.fill();
     }
 
@@ -127,7 +133,15 @@
 
     function toggleSpin(){if(isSpinning)stopSpin();else startSpin();}
 
-    function startSpin(){if(isSpinning)return;isSpinning=true;updateButton();velocity=20+Math.random()*20;document.getElementById('winnerSpot').innerHTML = '';isStopping=false;animationId=requestAnimationFrame(animate);}
+    function startSpin(){
+      if(isSpinning)return;
+      isSpinning=true;
+      updateButton();
+      velocity=20+Math.random()*20;
+      document.getElementById('winnerSpot').innerHTML='';
+      isStopping=false;
+      animationId=requestAnimationFrame(animate);
+    }
 
     function stopSpin(){if(!isSpinning){isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;return;}isSpinning=false;updateButton();isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;}
 
@@ -148,16 +162,10 @@
 
     function cancelAnim(){if(animationId){cancelAnimationFrame(animationId);animationId=null;}}
 
-    // Corrected winner calculation:
-    // Pointer sits at the top (12 o'clock). In canvas angles, 0deg is at +X (3 o'clock) and increase is clockwise (because Y points down).
-    // Segment i occupies [i*segAngle, (i+1)*segAngle) measured from +X clockwise. After rotating wheel by `rotation` degrees clockwise,
-    // the angle for segment boundaries becomes (i*segAngle + rotation). The pointer angle (clockwise from +X) is 270deg.
-    // Solve for i such that (i*segAngle + rotation) <= 270 < ((i+1)*segAngle + rotation)
-    // => i = floor(((270 - rotation) mod 360) / segAngle)
     function pickWinner(){
       const segAngleDeg = 360 / names.length;
       const normalizedRotation = ((rotation % 360) + 360) % 360;
-      const pointerDeg = 270; // top
+      const pointerDeg = 270;
       const relative = ((pointerDeg - normalizedRotation) + 360) % 360;
       const index = Math.floor(relative / segAngleDeg) % names.length;
       winner = names[index];
