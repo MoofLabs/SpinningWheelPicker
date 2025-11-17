@@ -152,10 +152,10 @@ This project demonstrates:
 
 ## 📄 License
 
-Free to use for personal and commercial projects. Attribution appreciated but not required.
+Free to use for personal and commercial projects. Attribution appreciated.
 
 ---
 
-**Built with ❤️ using vanilla JavaScript • No frameworks, no build tools, no dependencies**
+**Built using vanilla JavaScript • No frameworks, no build tools, no dependencies**
 
 [View Source](https://github.com/MoofLabs/SpinningWheelPicker) • [Report Issue](https://github.com/MoofLabs/SpinningWheelPicker/issues) • [Live Demo](https://mooflabs.github.io/SpinningWheelPicker/)
