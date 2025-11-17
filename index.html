@@ -3,7 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Spinning Wheel Picker</title>
+  <meta name="description" content="Interactive spinning wheel for random selection. Built with vanilla JavaScript and HTML5 Canvas." />
+  <meta name="theme-color" content="#7c3aed" />
+  <title>Spinning Wheel Picker - Random Name Selector</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json" />
+  
+  <!-- iOS specific -->
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  
   <style>
     :root {
       --bg1: #6b21a8;
@@ -39,11 +50,11 @@
       font-weight:800; font-size:18px; margin-top:12px; display:inline-block; 
     }
     .names-container {
-  max-height: 400px;
-  overflow-y: auto;
-  margin-bottom: 15px;
-  padding-right: 5px;
-}
+      max-height: 400px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      padding-right: 5px;
+    }
   </style>
 </head>
 <body>
@@ -69,7 +80,7 @@
       input.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('numNext').click();});
       document.getElementById('numNext').onclick=()=>{
         const n=parseInt(input.value);
-        if(!Number.isInteger(n)||n<2||n>20)return alert('Enter 2-20');
+        if(!Number.isInteger(n)||n<2||n>20)return alert('Please enter a number between 2 and 20');
         names=Array(n).fill(''); isConfiguring=true; render();
       };
     }
@@ -180,6 +191,17 @@
 
     render();
   })();
+  </script>
+  
+  <!-- Register Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed:', err));
+      });
+    }
   </script>
 </body>
 </html>
