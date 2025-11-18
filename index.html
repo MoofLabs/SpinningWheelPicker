@@ -168,12 +168,34 @@
       app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="createWheel" class="btn btn-primary">Create Wheel</button><button id="backBtn" class="btn btn-gray">Back</button>`;
       const inputs=document.querySelectorAll('.name-input');
       inputs.forEach(el=>{el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim();});
-      inputs.forEach(el=>{
+      inputs.forEach((el, index)=>{
         el.addEventListener('keydown',e=>{
           if(e.key==='Enter'){
             e.preventDefault();
-            if([...inputs].every(inp=>inp.value.trim())) document.getElementById('createWheel').click();
+            const nextIndex = index + 1;
+            if(nextIndex < inputs.length) {
+              // Move to next field and scroll it into view
+              inputs[nextIndex].focus();
+              inputs[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              // Last field - try to submit if all filled
+              if([...inputs].every(inp=>inp.value.trim())) {
+                document.getElementById('createWheel').click();
+              } else {
+                // Find first empty field and focus it
+                const firstEmpty = [...inputs].find(inp => !inp.value.trim());
+                if(firstEmpty) {
+                  firstEmpty.focus();
+                  firstEmpty.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }
+            }
           }
+        });
+        
+        // Also scroll into view when field is focused (helps with keyboard arrows)
+        el.addEventListener('focus', ()=>{
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
       });
       document.getElementById('createWheel').onclick=()=>{
