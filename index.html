@@ -45,6 +45,7 @@
     .btn-primary { background:#7c3aed; color:white; }
     .btn-green { background:#16a34a; color:white; }
     .btn-gray { background:#4b5563; color:white; }
+    .btn-mute { background:#f59e0b; color:white; padding:8px 12px; font-size:12px; margin-left:8px; }
     .winner { 
       background:#fbbf24; padding:12px 18px; border-radius:10px; 
       font-weight:800; font-size:18px; margin-top:12px; display:inline-block; 
@@ -65,7 +66,84 @@
     let numSegments='', names=[], isConfiguring=true, isSpinning=false, rotation=0, winner=null;
     let animationId=null, velocity=0, isStopping=false, stopStartTime=null, initialStopVelocity=0;
     let canvas, ctx, canvasSize=500;
+    let isMuted=false, lastSegmentIndex=-1;
+    let audioCtx=null;
     const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2'];
+
+    // Initialize audio context once
+    function getAudioContext() {
+      if(!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      // Resume if suspended (browser autoplay policy)
+      if(audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    // Sound functions using Web Audio API
+    function playTick() {
+      if(isMuted) return;
+      const ctx = getAudioContext();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.frequency.value = 600;
+      gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+      
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.05);
+    }
+
+    function playStop() {
+      if(isMuted) return;
+      const ctx = getAudioContext();
+      [500, 400].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        gain.gain.value = 0.1;
+        osc.start(ctx.currentTime + i * 0.1);
+        osc.stop(ctx.currentTime + i * 0.1 + 0.1);
+      });
+    }
+
+    function playWinner() {
+      if(isMuted) return;
+      const ctx = getAudioContext();
+      [523, 659, 784, 1047].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.2, ctx.currentTime + i * 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.4);
+        osc.start(ctx.currentTime + i * 0.15);
+        osc.stop(ctx.currentTime + i * 0.15 + 0.4);
+      });
+    }
+
+    function checkSegmentCrossing() {
+      if(!isSpinning && !isStopping) return;
+      const segAngleDeg = 360 / names.length;
+      const normalizedRotation = ((rotation % 360) + 360) % 360;
+      const pointerDeg = 270;
+      const relative = ((pointerDeg - normalizedRotation) + 360) % 360;
+      const currentSegment = Math.floor(relative / segAngleDeg) % names.length;
+      
+      if(currentSegment !== lastSegmentIndex) {
+        lastSegmentIndex = currentSegment;
+        playTick();
+      }
+    }
 
     function render(){
       app.innerHTML='';
@@ -109,12 +187,17 @@
       app.innerHTML=`<div style="text-align:center">
         <canvas id="wheelCanvas" width="${canvasSize}" height="${canvasSize}" style="max-width:100%"></canvas>
         <div id="winnerSpot"></div>
-        <div style="margin-top:10px"><button id="toggleSpin" class="btn btn-green">${isSpinning?'Stop Spinning':'Start Spinning'}</button> <button id="reconfigure" class="btn btn-gray">Reconfigure</button></div>
+        <div style="margin-top:10px">
+          <button id="toggleSpin" class="btn btn-green">${isSpinning?'Stop Spinning':'Start Spinning'}</button> 
+          <button id="reconfigure" class="btn btn-gray">Reconfigure</button>
+          <button id="muteBtn" class="btn btn-mute">${isMuted?'🔇 Unmute':'🔊 Mute'}</button>
+        </div>
         <div class="muted" style="margin-top:8px">Press SPACE to start/stop</div>
       </div>`;
       canvas=document.getElementById('wheelCanvas'); ctx=canvas.getContext('2d'); drawWheel();
       document.getElementById('toggleSpin').onclick=()=>{toggleSpin(); updateButton();};
       document.getElementById('reconfigure').onclick=()=>{cancelAnim(); names=[];render();};
+      document.getElementById('muteBtn').onclick=()=>{isMuted=!isMuted; updateButton();};
       window.onkeydown = (e) => {
         if (e.code === 'Space' && !isConfiguring) {
           e.preventDefault();
@@ -127,6 +210,8 @@
     function updateButton(){
       const btn=document.getElementById('toggleSpin');
       if(btn) btn.textContent=isSpinning?'Stop Spinning':'Start Spinning';
+      const muteBtn=document.getElementById('muteBtn');
+      if(muteBtn) muteBtn.textContent=isMuted?'🔇 Unmute':'🔊 Mute';
     }
 
     function initCanvas(){canvasSize=Math.min(500,window.innerWidth-60);}
@@ -156,11 +241,24 @@
       updateButton();
       velocity=20+Math.random()*20;
       document.getElementById('winnerSpot').innerHTML='';
+      lastSegmentIndex=-1;
       isStopping=false;
+      // Resume audio context on user interaction
+      if(audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
       animationId=requestAnimationFrame(animate);
     }
 
-    function stopSpin(){if(!isSpinning){isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;return;}isSpinning=false;updateButton();isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;}
+    function stopSpin(){
+      if(!isSpinning){isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;return;}
+      isSpinning=false;
+      updateButton();
+      playStop();
+      isStopping=true;
+      stopStartTime=Date.now();
+      initialStopVelocity=velocity;
+    }
 
     function animate(){
       if(isStopping){
@@ -168,12 +266,18 @@
         if(t<d){
           const p=t/d,eased=1-Math.pow(1-p,3);
           velocity=initialStopVelocity*(1-eased);
-          rotation+=velocity*0.5; drawWheel(); animationId=requestAnimationFrame(animate);
+          rotation+=velocity*0.5; 
+          checkSegmentCrossing();
+          drawWheel(); 
+          animationId=requestAnimationFrame(animate);
         }else{
           isStopping=false; velocity=0; cancelAnim(); pickWinner();
         }
       }else if(isSpinning){
-        rotation+=velocity*0.5; drawWheel(); animationId=requestAnimationFrame(animate);
+        rotation+=velocity*0.5; 
+        checkSegmentCrossing();
+        drawWheel(); 
+        animationId=requestAnimationFrame(animate);
       }
     }
 
@@ -187,6 +291,7 @@
       const index = Math.floor(relative / segAngleDeg) % names.length;
       winner = names[index];
       document.getElementById('winnerSpot').innerHTML=`<div class="winner">🎉 Winner: ${winner}! 🎉</div>`;
+      playWinner();
     }
 
     render();
