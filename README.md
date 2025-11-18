@@ -81,6 +81,15 @@ This creates a natural spinning sensation that gradually comes to rest.
 4. Click "Start Spinning" or press spacebar
 5. Winner appears when wheel stops!
 
+## ⌨️ Keyboard Navigation
+
+- **Enter Key**: Advance to next field (auto-scrolls on mobile)
+- **Spacebar**: Start/stop wheel spinning (when wheel is visible)
+- **Tab**: Navigate between fields (desktop)
+- **Last Field + Enter**: Creates wheel if all names are filled
+
+*Tip: On mobile, fields automatically scroll into view as you navigate for easier input with 10+ segments.*
+
 ## 🎨 Customization
 
 ### Colors
