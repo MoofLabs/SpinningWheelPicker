@@ -161,7 +161,7 @@ This project demonstrates:
 
 ## 📄 License
 
-Free to use for personal and commercial projects. Attribution appreciated.
+Free to use for personal projects. Attribution appreciated.
 
 ---
 
