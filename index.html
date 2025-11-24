@@ -63,12 +63,13 @@
   <script>
   (function(){
     const app=document.getElementById('app');
-    let numSegments='', names=[], isConfiguring=true, isSpinning=false, rotation=0, winner=null;
+    let numSegments='', names=[], customColors=[], isConfiguring=true, isSpinning=false, rotation=0, winner=null;
     let animationId=null, velocity=0, isStopping=false, stopStartTime=null, initialStopVelocity=0;
     let canvas, ctx, canvasSize=500;
     let isMuted=false, lastSegmentIndex=-1;
     let audioCtx=null;
     const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2'];
+    const COLOR_PALETTE=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2','#E74C3C','#3498DB','#2ECC71','#F39C12','#9B59B6','#1ABC9C','#E67E22','#34495E'];
 
     // Initialize audio context once
     function getAudioContext() {
@@ -159,30 +160,45 @@
       document.getElementById('numNext').onclick=()=>{
         const n=parseInt(input.value);
         if(!Number.isInteger(n)||n<2||n>20)return alert('Please enter a number between 2 and 20');
-        names=Array(n).fill(''); isConfiguring=true; render();
+        names=Array(n).fill(''); customColors=Array(n).fill(null); isConfiguring=true; render();
       };
     }
 
     function renderNamesConfig(){
-      const rows=names.map((nm,i)=>`<div><label>Segment ${i+1}</label><input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" /></div>`).join('');
+      const rows=names.map((nm,i)=>{
+        const colorPalette = COLOR_PALETTE.map(color=>`<div style="width:24px;height:24px;background:${color};border-radius:4px;cursor:pointer;border:2px solid ${customColors[i]===color?'#000':'#ddd'}" data-idx="${i}" data-color="${color}" class="color-swatch"></div>`).join('');
+        return `<div style="margin-bottom:16px;">
+          <label>Segment ${i+1}</label>
+          <input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" />
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">${colorPalette}</div>
+        </div>`;
+      }).join('');
       app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="createWheel" class="btn btn-primary">Create Wheel</button><button id="backBtn" class="btn btn-gray">Back</button>`;
+      
       const inputs=document.querySelectorAll('.name-input');
       inputs.forEach(el=>{el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim();});
+      
+      const colorSwatches=document.querySelectorAll('.color-swatch');
+      colorSwatches.forEach(el=>{
+        el.onclick=()=>{
+          const idx=+el.dataset.idx, color=el.dataset.color;
+          customColors[idx]=customColors[idx]===color?null:color;
+          render();
+        };
+      });
+      
       inputs.forEach((el, index)=>{
         el.addEventListener('keydown',e=>{
           if(e.key==='Enter'){
             e.preventDefault();
             const nextIndex = index + 1;
             if(nextIndex < inputs.length) {
-              // Move to next field and scroll it into view
               inputs[nextIndex].focus();
               inputs[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
             } else {
-              // Last field - try to submit if all filled
               if([...inputs].every(inp=>inp.value.trim())) {
                 document.getElementById('createWheel').click();
               } else {
-                // Find first empty field and focus it
                 const firstEmpty = [...inputs].find(inp => !inp.value.trim());
                 if(firstEmpty) {
                   firstEmpty.focus();
@@ -192,8 +208,6 @@
             }
           }
         });
-        
-        // Also scroll into view when field is focused (helps with keyboard arrows)
         el.addEventListener('focus', ()=>{
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
@@ -202,7 +216,7 @@
         if(names.some(n=>!n.trim()))return alert('Please fill all names');
         isConfiguring=false; winner=null; initCanvas(); render();
       };
-      document.getElementById('backBtn').onclick=()=>{names=[];render();};
+      document.getElementById('backBtn').onclick=()=>{names=[];customColors=[];render();};
     }
 
     function renderWheelUI(){
@@ -218,7 +232,7 @@
       </div>`;
       canvas=document.getElementById('wheelCanvas'); ctx=canvas.getContext('2d'); drawWheel();
       document.getElementById('toggleSpin').onclick=()=>{toggleSpin(); updateButton();};
-      document.getElementById('reconfigure').onclick=()=>{cancelAnim(); names=[];render();};
+      document.getElementById('reconfigure').onclick=()=>{cancelAnim(); names=[];customColors=[];render();};
       document.getElementById('muteBtn').onclick=()=>{isMuted=!isMuted; updateButton();};
       window.onkeydown = (e) => {
         if (e.code === 'Space' && !isConfiguring) {
@@ -242,15 +256,38 @@
       const cw=canvas.width=canvasSize,ch=canvas.height=canvasSize,cx=cw/2,cy=ch/2,r=Math.min(cx,cy)-10;
       ctx.clearRect(0,0,cw,ch); ctx.save(); ctx.translate(cx,cy); ctx.rotate((rotation*Math.PI)/180);
       const segAngle=2*Math.PI/names.length;
+      
+      // Dynamic text size based on number of segments
+      let fontSize;
+      if(names.length <= 4) fontSize = Math.floor(r*0.12);
+      else if(names.length <= 8) fontSize = Math.floor(r*0.09);
+      else fontSize = Math.floor(r*0.06);
+      
       names.forEach((name,i)=>{
         const start=i*segAngle,end=start+segAngle;
         ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,r,start,end); ctx.closePath();
-        ctx.fillStyle=COLORS[i%COLORS.length]; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
+        
+        // Use custom color if set, otherwise use default colors
+        const segmentColor = customColors[i] || COLORS[i%COLORS.length];
+        ctx.fillStyle=segmentColor; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
         ctx.save(); ctx.rotate(start+segAngle/2); ctx.textAlign='center'; ctx.fillStyle='#fff';
-        ctx.font=`bold ${Math.floor(r*0.08)}px Arial`; ctx.translate(r*0.6,0);
+        ctx.font=`bold ${fontSize}px Arial`; ctx.translate(r*0.6,0);
         wrapText(ctx,name,0,0,r*0.3); ctx.restore();
-      }); ctx.restore();
-      ctx.beginPath(); ctx.moveTo(cx,10); ctx.lineTo(cx-12,40); ctx.lineTo(cx+12,40); ctx.closePath(); ctx.fillStyle='#333'; ctx.fill();
+      }); 
+      ctx.restore();
+      
+      // Draw pointer outside the wheel (Wheel of Fortune style)
+      const pointerSize = 20;
+      ctx.beginPath(); 
+      ctx.moveTo(cx, cy - r + pointerSize*0.3); 
+      ctx.lineTo(cx - pointerSize*0.6, cy - r - pointerSize); 
+      ctx.lineTo(cx + pointerSize*0.6, cy - r - pointerSize); 
+      ctx.closePath(); 
+      ctx.fillStyle='#333'; 
+      ctx.fill();
+      ctx.strokeStyle='#fff';
+      ctx.lineWidth=2;
+      ctx.stroke();
     }
 
     function wrapText(ctx,text,x,y,maxWidth){const words=text.split(' ');let line='',lh=parseInt(ctx.font)+2,offsetY=0;for(let n=0;n<words.length;n++){const test=line+words[n]+' ';if(ctx.measureText(test).width>maxWidth&&n>0){ctx.fillText(line,x,y+offsetY);line=words[n]+' ';offsetY+=lh;}else line=test;}ctx.fillText(line.trim(),x,y+offsetY);}
