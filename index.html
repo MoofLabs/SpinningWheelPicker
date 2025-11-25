@@ -68,8 +68,9 @@
     let canvas, ctx, canvasSize=500;
     let isMuted=false, lastSegmentIndex=-1;
     let audioCtx=null;
+    let openColorPicker=-1; // Track which segment's color picker is open
     const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2'];
-    const COLOR_PALETTE=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2','#E74C3C','#3498DB','#2ECC71','#F39C12','#9B59B6','#1ABC9C','#E67E22','#34495E'];
+    const COLOR_PALETTE=['#E74C3C','#3498DB','#2ECC71','#F39C12','#9B59B6','#1ABC9C','#E67E22','#34495E'];
 
     // Initialize audio context once
     function getAudioContext() {
@@ -166,11 +167,26 @@
 
     function renderNamesConfig(){
       const rows=names.map((nm,i)=>{
-        const colorPalette = COLOR_PALETTE.map(color=>`<div style="width:24px;height:24px;background:${color};border-radius:4px;cursor:pointer;border:2px solid ${customColors[i]===color?'#000':'#ddd'}" data-idx="${i}" data-color="${color}" class="color-swatch"></div>`).join('');
+        const selectedColor = customColors[i];
+        const colorDisplay = selectedColor ? `<div style="width:28px;height:28px;background:${selectedColor};border-radius:4px;border:2px solid #333;"></div>` : '<div style="width:28px;height:28px;background:#ddd;border-radius:4px;border:2px solid #999;"></div>';
+        
+        let colorPalette = '';
+        if(openColorPicker === i) {
+          colorPalette = `<div style="display:flex;gap:6px;padding:8px;background:#f3f4f6;border-radius:8px;margin-top:6px;">
+            ${COLOR_PALETTE.map(color=>`<div style="width:32px;height:32px;background:${color};border-radius:6px;cursor:pointer;border:2px solid ${customColors[i]===color?'#000':'#ddd'};transition:transform 0.2s;" data-idx="${i}" data-color="${color}" class="color-swatch"></div>`).join('')}
+          </div>`;
+        }
+        
         return `<div style="margin-bottom:16px;">
           <label>Segment ${i+1}</label>
-          <input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" />
-          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">${colorPalette}</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" style="flex:1;" />
+            <button class="color-btn" data-idx="${i}" style="padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
+              ${colorDisplay}
+              <span>${openColorPicker === i ? '✕' : '🎨'}</span>
+            </button>
+          </div>
+          ${colorPalette}
         </div>`;
       }).join('');
       app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="createWheel" class="btn btn-primary">Create Wheel</button><button id="backBtn" class="btn btn-gray">Back</button>`;
@@ -178,11 +194,21 @@
       const inputs=document.querySelectorAll('.name-input');
       inputs.forEach(el=>{el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim();});
       
+      const colorBtns=document.querySelectorAll('.color-btn');
+      colorBtns.forEach(el=>{
+        el.onclick=()=>{
+          const idx=+el.dataset.idx;
+          openColorPicker = openColorPicker === idx ? -1 : idx;
+          render();
+        };
+      });
+      
       const colorSwatches=document.querySelectorAll('.color-swatch');
       colorSwatches.forEach(el=>{
         el.onclick=()=>{
           const idx=+el.dataset.idx, color=el.dataset.color;
-          customColors[idx]=customColors[idx]===color?null:color;
+          customColors[idx]=color;
+          openColorPicker=-1;
           render();
         };
       });
@@ -214,9 +240,9 @@
       });
       document.getElementById('createWheel').onclick=()=>{
         if(names.some(n=>!n.trim()))return alert('Please fill all names');
-        isConfiguring=false; winner=null; initCanvas(); render();
+        isConfiguring=false; winner=null; openColorPicker=-1; initCanvas(); render();
       };
-      document.getElementById('backBtn').onclick=()=>{names=[];customColors=[];render();};
+      document.getElementById('backBtn').onclick=()=>{names=[];customColors=[];openColorPicker=-1;render();};
     }
 
     function renderWheelUI(){
@@ -257,19 +283,58 @@
       ctx.clearRect(0,0,cw,ch); ctx.save(); ctx.translate(cx,cy); ctx.rotate((rotation*Math.PI)/180);
       const segAngle=2*Math.PI/names.length;
       
-      // Dynamic text size based on number of segments
+      // Dynamic text size based on number of segments - maximized for readability
       let fontSize;
-      if(names.length <= 4) fontSize = Math.floor(r*0.12);
-      else if(names.length <= 8) fontSize = Math.floor(r*0.09);
-      else fontSize = Math.floor(r*0.06);
+      if(names.length <= 4) fontSize = Math.floor(r*0.15);
+      else if(names.length <= 6) fontSize = Math.floor(r*0.12);
+      else if(names.length <= 8) fontSize = Math.floor(r*0.10);
+      else if(names.length <= 12) fontSize = Math.floor(r*0.08);
+      else fontSize = Math.floor(r*0.065);
+      
+      // Build final color array ensuring uniqueness
+      const finalColors = [];
+      const usedColors = new Set();
+      
+      // First pass: assign custom colors and track them
+      names.forEach((name, i) => {
+        if(customColors[i]) {
+          finalColors[i] = customColors[i];
+          usedColors.add(customColors[i]);
+        } else {
+          finalColors[i] = null;
+        }
+      });
+      
+      // Second pass: assign unused colors to segments without custom colors
+      const allColors = [...COLOR_PALETTE, ...COLORS];
+      let colorIndex = 0;
+      
+      names.forEach((name, i) => {
+        if(!finalColors[i]) {
+          // Find next unused color
+          let foundColor = null;
+          for(let j = 0; j < allColors.length * 2; j++) {
+            const testColor = allColors[(colorIndex + j) % allColors.length];
+            if(!usedColors.has(testColor)) {
+              foundColor = testColor;
+              colorIndex = (colorIndex + j + 1) % allColors.length;
+              break;
+            }
+          }
+          // If all colors are used, just cycle through
+          if(!foundColor) {
+            foundColor = allColors[i % allColors.length];
+          }
+          finalColors[i] = foundColor;
+          usedColors.add(foundColor);
+        }
+      });
       
       names.forEach((name,i)=>{
         const start=i*segAngle,end=start+segAngle;
         ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,r,start,end); ctx.closePath();
         
-        // Use custom color if set, otherwise use default colors
-        const segmentColor = customColors[i] || COLORS[i%COLORS.length];
-        ctx.fillStyle=segmentColor; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
+        ctx.fillStyle=finalColors[i]; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
         ctx.save(); ctx.rotate(start+segAngle/2); ctx.textAlign='center'; ctx.fillStyle='#fff';
         ctx.font=`bold ${fontSize}px Arial`; ctx.translate(r*0.6,0);
         wrapText(ctx,name,0,0,r*0.3); ctx.restore();
