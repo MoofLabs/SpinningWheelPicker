@@ -56,6 +56,25 @@
       margin-bottom: 15px;
       padding-right: 5px;
     }
+    .color-picker-overlay {
+      position: fixed;
+      background: white;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      z-index: 1000;
+      display: none;
+    }
+    .color-picker-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 999;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -170,84 +189,84 @@
         const selectedColor = customColors[i];
         const colorDisplay = selectedColor ? `<div style="width:28px;height:28px;background:${selectedColor};border-radius:4px;border:2px solid #333;"></div>` : '<div style="width:28px;height:28px;background:#ddd;border-radius:4px;border:2px solid #999;"></div>';
         
-        const colorPalette = `<div id="colorPicker${i}" style="display:none;gap:6px;padding:8px;background:#f3f4f6;border-radius:8px;margin-top:6px;">
-          ${COLOR_PALETTE.map(color=>`<div style="width:32px;height:32px;background:${color};border-radius:6px;cursor:pointer;border:2px solid ${customColors[i]===color?'#000':'#ddd'};transition:transform 0.2s;" data-idx="${i}" data-color="${color}" class="color-swatch"></div>`).join('')}
-        </div>`;
-        
         return `<div style="margin-bottom:16px;">
           <label>Segment ${i+1}</label>
           <div style="display:flex;gap:8px;align-items:center;">
             <input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" style="flex:1;" />
             <button class="color-btn" data-idx="${i}" style="padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
               ${colorDisplay}
-              <span class="color-btn-icon">🎨</span>
+              <span>🎨</span>
             </button>
           </div>
-          ${colorPalette}
         </div>`;
       }).join('');
-      app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="createWheel" class="btn btn-primary">Create Wheel</button><button id="backBtn" class="btn btn-gray">Back</button>`;
+      
+      app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="createWheel" class="btn btn-primary">Create Wheel</button><button id="backBtn" class="btn btn-gray">Back</button>
+      <div class="color-picker-backdrop" id="colorPickerBackdrop"></div>
+      <div class="color-picker-overlay" id="colorPickerOverlay">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;max-width:300px;">
+          ${COLOR_PALETTE.map(color=>`<div style="width:32px;height:32px;background:${color};border-radius:6px;cursor:pointer;border:2px solid #ddd;transition:transform 0.1s;" data-color="${color}" class="color-swatch-overlay"></div>`).join('')}
+        </div>
+      </div>`;
       
       const inputs=document.querySelectorAll('.name-input');
       inputs.forEach(el=>{el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim();});
+      
+      const backdrop = document.getElementById('colorPickerBackdrop');
+      const overlay = document.getElementById('colorPickerOverlay');
+      let currentPickerIndex = -1;
+      
+      const closeColorPicker = () => {
+        backdrop.style.display = 'none';
+        overlay.style.display = 'none';
+        currentPickerIndex = -1;
+      };
+      
+      backdrop.onclick = closeColorPicker;
       
       const colorBtns=document.querySelectorAll('.color-btn');
       colorBtns.forEach(el=>{
         el.onclick=(e)=>{
           e.preventDefault();
+          e.stopPropagation();
           const idx=+el.dataset.idx;
-          const picker = document.getElementById(`colorPicker${idx}`);
-          const icon = el.querySelector('.color-btn-icon');
-          const isOpen = picker.style.display === 'flex';
+          currentPickerIndex = idx;
           
-          // Close all other pickers
-          document.querySelectorAll('[id^="colorPicker"]').forEach(p => {
-            if(p !== picker) {
-              p.style.display = 'none';
-            }
-          });
-          document.querySelectorAll('.color-btn-icon').forEach(ic => {
-            if(ic !== icon) {
-              ic.textContent = '🎨';
-            }
-          });
+          // Position overlay near the button
+          const rect = el.getBoundingClientRect();
+          overlay.style.top = `${rect.bottom + 8}px`;
+          overlay.style.left = `${Math.max(10, rect.left - 100)}px`;
           
-          // Toggle this picker
-          if(isOpen) {
-            picker.style.display = 'none';
-            icon.textContent = '🎨';
-          } else {
-            picker.style.display = 'flex';
-            icon.textContent = '✕';
-          }
-        };
-      });
-      
-      const colorSwatches=document.querySelectorAll('.color-swatch');
-      colorSwatches.forEach(el=>{
-        el.onclick=()=>{
-          const idx=+el.dataset.idx, color=el.dataset.color;
-          customColors[idx]=color;
-          
-          // Update the color display in the button without full re-render
-          const btn = document.querySelector(`.color-btn[data-idx="${idx}"]`);
-          const colorDisplay = btn.querySelector('div');
-          colorDisplay.style.background = color;
-          colorDisplay.style.border = '2px solid #333';
-          
-          // Close the picker
-          const picker = document.getElementById(`colorPicker${idx}`);
-          picker.style.display = 'none';
-          btn.querySelector('.color-btn-icon').textContent = '🎨';
-          
-          // Update all swatches in this picker to show new selection
-          picker.querySelectorAll('.color-swatch').forEach(swatch => {
-            if(swatch.dataset.color === color) {
+          // Update selected state in overlay
+          overlay.querySelectorAll('.color-swatch-overlay').forEach(swatch => {
+            if(swatch.dataset.color === customColors[idx]) {
               swatch.style.border = '2px solid #000';
             } else {
               swatch.style.border = '2px solid #ddd';
             }
           });
+          
+          backdrop.style.display = 'block';
+          overlay.style.display = 'block';
+        };
+      });
+      
+      const colorSwatches=overlay.querySelectorAll('.color-swatch-overlay');
+      colorSwatches.forEach(el=>{
+        el.onclick=(e)=>{
+          e.stopPropagation();
+          if(currentPickerIndex === -1) return;
+          
+          const color=el.dataset.color;
+          customColors[currentPickerIndex]=color;
+          
+          // Update the color display in the button
+          const btn = document.querySelector(`.color-btn[data-idx="${currentPickerIndex}"]`);
+          const colorDisplay = btn.querySelector('div');
+          colorDisplay.style.background = color;
+          colorDisplay.style.border = '2px solid #333';
+          
+          closeColorPicker();
         };
       });
       
@@ -278,9 +297,9 @@
       });
       document.getElementById('createWheel').onclick=()=>{
         if(names.some(n=>!n.trim()))return alert('Please fill all names');
-        isConfiguring=false; winner=null; openColorPicker=-1; initCanvas(); render();
+        isConfiguring=false; winner=null; initCanvas(); render();
       };
-      document.getElementById('backBtn').onclick=()=>{names=[];customColors=[];openColorPicker=-1;render();};
+      document.getElementById('backBtn').onclick=()=>{names=[];customColors=[];render();};
     }
 
     function renderWheelUI(){
