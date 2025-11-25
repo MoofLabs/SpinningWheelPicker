@@ -170,12 +170,9 @@
         const selectedColor = customColors[i];
         const colorDisplay = selectedColor ? `<div style="width:28px;height:28px;background:${selectedColor};border-radius:4px;border:2px solid #333;"></div>` : '<div style="width:28px;height:28px;background:#ddd;border-radius:4px;border:2px solid #999;"></div>';
         
-        let colorPalette = '';
-        if(openColorPicker === i) {
-          colorPalette = `<div style="display:flex;gap:6px;padding:8px;background:#f3f4f6;border-radius:8px;margin-top:6px;">
-            ${COLOR_PALETTE.map(color=>`<div style="width:32px;height:32px;background:${color};border-radius:6px;cursor:pointer;border:2px solid ${customColors[i]===color?'#000':'#ddd'};transition:transform 0.2s;" data-idx="${i}" data-color="${color}" class="color-swatch"></div>`).join('')}
-          </div>`;
-        }
+        const colorPalette = `<div id="colorPicker${i}" style="display:none;gap:6px;padding:8px;background:#f3f4f6;border-radius:8px;margin-top:6px;">
+          ${COLOR_PALETTE.map(color=>`<div style="width:32px;height:32px;background:${color};border-radius:6px;cursor:pointer;border:2px solid ${customColors[i]===color?'#000':'#ddd'};transition:transform 0.2s;" data-idx="${i}" data-color="${color}" class="color-swatch"></div>`).join('')}
+        </div>`;
         
         return `<div style="margin-bottom:16px;">
           <label>Segment ${i+1}</label>
@@ -183,7 +180,7 @@
             <input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" style="flex:1;" />
             <button class="color-btn" data-idx="${i}" style="padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
               ${colorDisplay}
-              <span>${openColorPicker === i ? '✕' : '🎨'}</span>
+              <span class="color-btn-icon">🎨</span>
             </button>
           </div>
           ${colorPalette}
@@ -196,10 +193,33 @@
       
       const colorBtns=document.querySelectorAll('.color-btn');
       colorBtns.forEach(el=>{
-        el.onclick=()=>{
+        el.onclick=(e)=>{
+          e.preventDefault();
           const idx=+el.dataset.idx;
-          openColorPicker = openColorPicker === idx ? -1 : idx;
-          render();
+          const picker = document.getElementById(`colorPicker${idx}`);
+          const icon = el.querySelector('.color-btn-icon');
+          const isOpen = picker.style.display === 'flex';
+          
+          // Close all other pickers
+          document.querySelectorAll('[id^="colorPicker"]').forEach(p => {
+            if(p !== picker) {
+              p.style.display = 'none';
+            }
+          });
+          document.querySelectorAll('.color-btn-icon').forEach(ic => {
+            if(ic !== icon) {
+              ic.textContent = '🎨';
+            }
+          });
+          
+          // Toggle this picker
+          if(isOpen) {
+            picker.style.display = 'none';
+            icon.textContent = '🎨';
+          } else {
+            picker.style.display = 'flex';
+            icon.textContent = '✕';
+          }
         };
       });
       
@@ -208,8 +228,26 @@
         el.onclick=()=>{
           const idx=+el.dataset.idx, color=el.dataset.color;
           customColors[idx]=color;
-          openColorPicker=-1;
-          render();
+          
+          // Update the color display in the button without full re-render
+          const btn = document.querySelector(`.color-btn[data-idx="${idx}"]`);
+          const colorDisplay = btn.querySelector('div');
+          colorDisplay.style.background = color;
+          colorDisplay.style.border = '2px solid #333';
+          
+          // Close the picker
+          const picker = document.getElementById(`colorPicker${idx}`);
+          picker.style.display = 'none';
+          btn.querySelector('.color-btn-icon').textContent = '🎨';
+          
+          // Update all swatches in this picker to show new selection
+          picker.querySelectorAll('.color-swatch').forEach(swatch => {
+            if(swatch.dataset.color === color) {
+              swatch.style.border = '2px solid #000';
+            } else {
+              swatch.style.border = '2px solid #ddd';
+            }
+          });
         };
       });
       
