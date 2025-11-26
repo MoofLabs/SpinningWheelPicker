@@ -14,523 +14,145 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  
   <style>
-    :root {
-      --bg1: #6b21a8;
-      --bg2: #ec4899;
-      --card-bg: #fff;
-    }
-    html,body { height:100%; margin:0; font-family:Arial, sans-serif; }
-    body {
-      background:linear-gradient(135deg,var(--bg1),var(--bg2));
-      display:flex; align-items:center; justify-content:center; padding:20px;
-    }
-    .card {
-      background:var(--card-bg); border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.2);
-      padding:24px; max-width:760px; width:100%;
-    }
+    :root { --bg1:#6b21a8; --bg2:#ec4899; }
+    html,body { height:100%; margin:0; font-family:Arial,sans-serif; }
+    body { background:linear-gradient(135deg,var(--bg1),var(--bg2)); display:flex; align-items:center; justify-content:center; padding:20px; }
+    .card { background:#fff; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.2); padding:24px; max-width:760px; width:100%; }
     h1 { text-align:center; margin:0 0 16px 0; }
     label { display:block; font-weight:600; margin-bottom:6px; }
-    input[type="number"], input[type="text"] {
-      width:100%; padding:10px; border-radius:8px; border:2px solid #e5e7eb; 
-      margin-bottom:10px; box-sizing:border-box; font-size:16px;
-    }
-    input:focus { border-color: #7c3aed; outline:none; }
-    .btn { 
-      display:inline-block; padding:10px 18px; border-radius:8px; border:none; 
-      cursor:pointer; font-weight:700; font-size:14px; 
-    }
+    input { width:100%; padding:10px; border-radius:8px; border:2px solid #e5e7eb; margin-bottom:10px; box-sizing:border-box; font-size:16px; }
+    input:focus { border-color:#7c3aed; outline:none; }
+    .btn { display:inline-block; padding:10px 18px; border-radius:8px; border:none; cursor:pointer; font-weight:700; font-size:14px; }
     .btn:hover { opacity:0.9; }
     .btn-primary { background:#7c3aed; color:white; }
     .btn-green { background:#16a34a; color:white; }
     .btn-gray { background:#4b5563; color:white; }
     .btn-mute { background:#f59e0b; color:white; padding:8px 12px; font-size:12px; margin-left:8px; }
-    .winner { 
-      background:#fbbf24; padding:12px 18px; border-radius:10px; 
-      font-weight:800; font-size:18px; margin-top:12px; display:inline-block; 
-    }
-    .names-container {
-      max-height: 400px;
-      overflow-y: auto;
-      margin-bottom: 15px;
-      padding-right: 5px;
-    }
-    .color-picker-overlay {
-      position: fixed;
-      background: white;
-      border-radius: 12px;
-      padding: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      z-index: 1000;
-      display: none;
-    }
-    .color-picker-backdrop {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.3);
-      z-index: 999;
-      display: none;
-    }
+    .winner { background:#fbbf24; padding:12px 18px; border-radius:10px; font-weight:800; font-size:18px; margin-top:12px; display:inline-block; }
+    .names-container { max-height:400px; overflow-y:auto; margin-bottom:15px; padding-right:5px; }
+    .color-picker-overlay { position:fixed; background:white; border-radius:12px; padding:12px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:1000; display:none; }
+    .color-picker-backdrop { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.3); z-index:999; display:none; }
   </style>
 </head>
 <body>
   <div class="card" id="app"></div>
   <script>
-  (function(){
+  (()=>{
     const app=document.getElementById('app');
-    let numSegments='', names=[], customColors=[], isConfiguring=true, isSpinning=false, rotation=0, winner=null;
-    let animationId=null, velocity=0, isStopping=false, stopStartTime=null, initialStopVelocity=0;
-    let canvas, ctx, canvasSize=500;
-    let isMuted=false, lastSegmentIndex=-1;
-    let audioCtx=null;
-    let openColorPicker=-1;
+    let names=[], customColors=[], isConfiguring=true, isSpinning=false, rotation=0, canvas, ctx, canvasSize=500;
+    let animationId, velocity=0, isStopping=false, stopStartTime, initialStopVelocity, isMuted=false, lastSegmentIndex=-1, audioCtx;
     const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2'];
-    const COLOR_PALETTE=['#E74C3C','#3498DB','#2ECC71','#FFD700','#9B59B6','#00CED1','#E67E22','#34495E'];
+    const PALETTE=['#E74C3C','#3498DB','#2ECC71','#FFD700','#9B59B6','#00CED1','#E67E22','#34495E'];
 
-    // Initialize audio context once
-    function getAudioContext() {
-      if(!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if(audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-      return audioCtx;
-    }
+    // Audio helpers
+    const getAudio=()=>{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();return audioCtx;};
+    const playTone=(freqs,dur=0.05,gain=0.15)=>{if(isMuted)return;const ctx=getAudio();freqs.forEach((f,i)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=f;g.gain.setValueAtTime(gain,ctx.currentTime+i*0.1);g.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+i*0.1+dur);o.start(ctx.currentTime+i*0.1);o.stop(ctx.currentTime+i*0.1+dur);});};
+    
+    const checkSegment=()=>{if(!isSpinning&&!isStopping)return;const seg=Math.floor((((270-((rotation%360)+360)%360)+360)%360)/(360/names.length))%names.length;if(seg!==lastSegmentIndex){lastSegmentIndex=seg;playTone([600]);}};
 
-    function playTick() {
-      if(isMuted) return;
-      const ctx = getAudioContext();
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      
-      oscillator.frequency.value = 600;
-      gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-      
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.05);
-    }
+    // Render functions
+    const render=()=>{app.innerHTML='';if(names.length===0)return renderNum();if(isConfiguring)return renderNames();renderWheel();};
+    
+    const renderNum=()=>{
+      app.innerHTML='<h1>Spinning Wheel</h1><label>Segments (2-20)</label><input id="numInput" type="number" min="2" max="20" placeholder="Enter a number"/><button id="next" class="btn btn-primary">Next</button>';
+      const inp=document.getElementById('numInput');
+      const handleNext=()=>{const n=parseInt(inp.value);if(!Number.isInteger(n)||n<2||n>20)return alert('Enter 2-20');names=Array(n).fill('');customColors=Array(n).fill(null);isConfiguring=true;render();};
+      inp.addEventListener('keydown',e=>{if(e.key==='Enter')handleNext();});
+      document.getElementById('next').onclick=handleNext;
+      setTimeout(()=>inp.focus(),0);
+    };
 
-    function playStop() {
-      if(isMuted) return;
-      const ctx = getAudioContext();
-      [500, 400].forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = freq;
-        gain.gain.value = 0.1;
-        osc.start(ctx.currentTime + i * 0.1);
-        osc.stop(ctx.currentTime + i * 0.1 + 0.1);
-      });
-    }
-
-    function playWinner() {
-      if(isMuted) return;
-      const ctx = getAudioContext();
-      [523, 659, 784, 1047].forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.2, ctx.currentTime + i * 0.15);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.4);
-        osc.start(ctx.currentTime + i * 0.15);
-        osc.stop(ctx.currentTime + i * 0.15 + 0.4);
-      });
-    }
-
-    function checkSegmentCrossing() {
-      if(!isSpinning && !isStopping) return;
-      const segAngleDeg = 360 / names.length;
-      const normalizedRotation = ((rotation % 360) + 360) % 360;
-      const pointerDeg = 270;
-      const relative = ((pointerDeg - normalizedRotation) + 360) % 360;
-      const currentSegment = Math.floor(relative / segAngleDeg) % names.length;
-      
-      if(currentSegment !== lastSegmentIndex) {
-        lastSegmentIndex = currentSegment;
-        playTick();
-      }
-    }
-
-    function render(){
-      app.innerHTML='';
-      if(names.length===0)return renderNumSegments();
-      if(isConfiguring)return renderNamesConfig();
-      renderWheelUI();
-    }
-
-    function renderNumSegments(){
-      app.innerHTML='<h1>Spinning Wheel Picker</h1><label>How many segments? (2-20)</label><input id="numSegmentsInput" type="number" min="2" max="20" placeholder="Enter a number" /><button id="numNext" class="btn btn-primary">Next</button>';
-      const input=document.getElementById('numSegmentsInput');
-      input.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('numNext').click();});
-      document.getElementById('numNext').onclick=()=>{
-        const n=parseInt(input.value);
-        if(!Number.isInteger(n)||n<2||n>20)return alert('Please enter a number between 2 and 20');
-        names=Array(n).fill(''); customColors=Array(n).fill(null); isConfiguring=true; render();
-      };
-    }
-
-    function renderNamesConfig(){
+    const renderNames=()=>{
       const rows=names.map((nm,i)=>{
-        const selectedColor = customColors[i];
-        const colorDisplay = selectedColor ? `<div style="width:28px;height:28px;background:${selectedColor};border-radius:4px;border:2px solid #333;"></div>` : '<div style="width:28px;height:28px;background:#ddd;border-radius:4px;border:2px solid #999;"></div>';
-        
-        return `<div style="margin-bottom:16px;">
-          <label>Segment ${i+1}</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" style="flex:1;" />
-            <button class="color-btn" data-idx="${i}" style="padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
-              ${colorDisplay}
-              <span>🎨</span>
-            </button>
-          </div>
-        </div>`;
+        const col=customColors[i]?`<div style="width:28px;height:28px;background:${customColors[i]};border-radius:4px;border:2px solid #333"></div>`:'<div style="width:28px;height:28px;background:#ddd;border-radius:4px;border:2px solid #999"></div>';
+        return`<div style="margin-bottom:16px"><label>Segment ${i+1}</label><div style="display:flex;gap:8px;align-items:center"><input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" style="flex:1"/><button class="color-btn" data-idx="${i}" style="padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600">${col}<span>🎨</span></button></div></div>`;
       }).join('');
+      app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="create" class="btn btn-primary">Create</button><button id="back" class="btn btn-gray">Back</button><div class="color-picker-backdrop" id="backdrop"></div><div class="color-picker-overlay" id="overlay"><div style="display:flex;gap:8px">${PALETTE.map(c=>`<div style="width:32px;height:32px;background:${c};border-radius:6px;cursor:pointer;border:2px solid #ddd" data-color="${c}" class="swatch"></div>`).join('')}</div></div>`;
       
-      app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="createWheel" class="btn btn-primary">Create Wheel</button><button id="backBtn" class="btn btn-gray">Back</button>
-      <div class="color-picker-backdrop" id="colorPickerBackdrop"></div>
-      <div class="color-picker-overlay" id="colorPickerOverlay">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;max-width:300px;">
-          ${COLOR_PALETTE.map(color=>`<div style="width:32px;height:32px;background:${color};border-radius:6px;cursor:pointer;border:2px solid #ddd;transition:transform 0.1s;" data-color="${color}" class="color-swatch-overlay"></div>`).join('')}
-        </div>
-      </div>`;
+      document.querySelectorAll('.name-input').forEach(el=>el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim());
       
-      const inputs=document.querySelectorAll('.name-input');
-      inputs.forEach(el=>{el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim();});
+      const backdrop=document.getElementById('backdrop'),overlay=document.getElementById('overlay');
+      let curIdx=-1;
+      const close=()=>{backdrop.style.display='none';overlay.style.display='none';curIdx=-1;};
+      backdrop.onclick=close;
       
-      const backdrop = document.getElementById('colorPickerBackdrop');
-      const overlay = document.getElementById('colorPickerOverlay');
-      let currentPickerIndex = -1;
+      document.querySelectorAll('.color-btn').forEach(el=>el.onclick=e=>{e.preventDefault();e.stopPropagation();curIdx=+el.dataset.idx;const r=el.getBoundingClientRect();overlay.style.top=`${r.bottom+8}px`;overlay.style.left=`${Math.max(10,r.left-100)}px`;overlay.querySelectorAll('.swatch').forEach(s=>s.style.border=s.dataset.color===customColors[curIdx]?'2px solid #000':'2px solid #ddd');backdrop.style.display='block';overlay.style.display='block';});
       
-      const closeColorPicker = () => {
-        backdrop.style.display = 'none';
-        overlay.style.display = 'none';
-        currentPickerIndex = -1;
-      };
+      document.querySelectorAll('.swatch').forEach(el=>el.onclick=e=>{e.stopPropagation();if(curIdx===-1)return;customColors[curIdx]=el.dataset.color;const btn=document.querySelector(`.color-btn[data-idx="${curIdx}"]`),cd=btn.querySelector('div');cd.style.background=el.dataset.color;cd.style.border='2px solid #333';close();});
       
-      backdrop.onclick = closeColorPicker;
-      
-      const colorBtns=document.querySelectorAll('.color-btn');
-      colorBtns.forEach(el=>{
-        el.onclick=(e)=>{
-          e.preventDefault();
-          e.stopPropagation();
-          const idx=+el.dataset.idx;
-          currentPickerIndex = idx;
-          
-          const rect = el.getBoundingClientRect();
-          overlay.style.top = `${rect.bottom + 8}px`;
-          overlay.style.left = `${Math.max(10, rect.left - 100)}px`;
-          
-          overlay.querySelectorAll('.color-swatch-overlay').forEach(swatch => {
-            if(swatch.dataset.color === customColors[idx]) {
-              swatch.style.border = '2px solid #000';
-            } else {
-              swatch.style.border = '2px solid #ddd';
-            }
-          });
-          
-          backdrop.style.display = 'block';
-          overlay.style.display = 'block';
-        };
-      });
-      
-      const colorSwatches=overlay.querySelectorAll('.color-swatch-overlay');
-      colorSwatches.forEach(el=>{
-        el.onclick=(e)=>{
-          e.stopPropagation();
-          if(currentPickerIndex === -1) return;
-          
-          const color=el.dataset.color;
-          customColors[currentPickerIndex]=color;
-          
-          const btn = document.querySelector(`.color-btn[data-idx="${currentPickerIndex}"]`);
-          const colorDisplay = btn.querySelector('div');
-          colorDisplay.style.background = color;
-          colorDisplay.style.border = '2px solid #333';
-          
-          closeColorPicker();
-        };
-      });
-      
-      inputs.forEach((el, index)=>{
-        el.addEventListener('keydown',e=>{
-          if(e.key==='Enter'){
-            e.preventDefault();
-            const nextIndex = index + 1;
-            if(nextIndex < inputs.length) {
-              inputs[nextIndex].focus();
-              inputs[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            } else {
-              if([...inputs].every(inp=>inp.value.trim())) {
-                document.getElementById('createWheel').click();
-              } else {
-                const firstEmpty = [...inputs].find(inp => !inp.value.trim());
-                if(firstEmpty) {
-                  firstEmpty.focus();
-                  firstEmpty.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-              }
-            }
-          }
-        });
-        el.addEventListener('focus', ()=>{
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
-      });
-      document.getElementById('createWheel').onclick=()=>{
-        if(names.some(n=>!n.trim()))return alert('Please fill all names');
-        isConfiguring=false; winner=null; initCanvas(); render();
-      };
-      document.getElementById('backBtn').onclick=()=>{names=[];customColors=[];render();};
-    }
+      document.getElementById('create').onclick=()=>{if(names.some(n=>!n.trim()))return alert('Fill all names');isConfiguring=false;canvasSize=Math.min(500,window.innerWidth-60);render();};
+      document.getElementById('back').onclick=()=>{names=[];customColors=[];render();};
+    };
 
-    function renderWheelUI(){
-      app.innerHTML=`<div style="text-align:center">
-        <canvas id="wheelCanvas" width="${canvasSize}" height="${canvasSize}" style="max-width:100%"></canvas>
-        <div id="winnerSpot"></div>
-        <div style="margin-top:10px">
-          <button id="toggleSpin" class="btn btn-green">${isSpinning?'Stop Spinning':'Start Spinning'}</button> 
-          <button id="reconfigure" class="btn btn-gray">Reconfigure</button>
-          <button id="muteBtn" class="btn btn-mute">${isMuted?'🔇 Unmute':'🔊 Mute'}</button>
-        </div>
-        <div class="muted" style="margin-top:8px">Press SPACE to start/stop</div>
-      </div>`;
-      canvas=document.getElementById('wheelCanvas'); ctx=canvas.getContext('2d'); drawWheel();
-      document.getElementById('toggleSpin').onclick=()=>{toggleSpin(); updateButton();};
-      document.getElementById('reconfigure').onclick=()=>{cancelAnim(); names=[];customColors=[];render();};
-      document.getElementById('muteBtn').onclick=()=>{isMuted=!isMuted; updateButton();};
-      window.onkeydown = (e) => {
-        if (e.code === 'Space' && !isConfiguring) {
-          e.preventDefault();
-          toggleSpin();
-          updateButton();
-        }
-      };
-    }
+    const renderWheel=()=>{
+      app.innerHTML=`<div style="text-align:center"><canvas id="canvas" width="${canvasSize}" height="${canvasSize}" style="max-width:100%"></canvas><div id="winner" style="min-height:50px"></div><div style="margin-top:10px"><button id="spin" class="btn btn-green">${isSpinning?'Stop':'Start'}</button> <button id="reconf" class="btn btn-gray">Reconfigure</button><button id="mute" class="btn btn-mute">${isMuted?'🔇 Unmute':'🔊 Mute'}</button></div><div style="margin-top:8px">Press SPACE</div></div>`;
+      canvas=document.getElementById('canvas');ctx=canvas.getContext('2d');drawWheel();
+      document.getElementById('spin').onclick=()=>{toggleSpin();document.getElementById('spin').textContent=isSpinning?'Stop':'Start';};
+      document.getElementById('reconf').onclick=()=>{if(animationId)cancelAnimationFrame(animationId);names=[];customColors=[];render();};
+      document.getElementById('mute').onclick=()=>{isMuted=!isMuted;document.getElementById('mute').textContent=isMuted?'🔇 Unmute':'🔊 Mute';};
+      window.onkeydown=e=>{if(e.code==='Space'&&!isConfiguring){e.preventDefault();toggleSpin();document.getElementById('spin').textContent=isSpinning?'Stop':'Start';}};
+    };
 
-    function updateButton(){
-      const btn=document.getElementById('toggleSpin');
-      if(btn) btn.textContent=isSpinning?'Stop Spinning':'Start Spinning';
-      const muteBtn=document.getElementById('muteBtn');
-      if(muteBtn) muteBtn.textContent=isMuted?'🔇 Unmute':'🔊 Mute';
-    }
-
-    function initCanvas(){canvasSize=Math.min(500,window.innerWidth-60);}
-
-    function drawWheel(){
+    const drawWheel=()=>{
       const cw=canvas.width=canvasSize,ch=canvas.height=canvasSize,cx=cw/2,cy=ch/2,r=Math.min(cx,cy)-10;
-      ctx.clearRect(0,0,cw,ch); ctx.save(); ctx.translate(cx,cy); ctx.rotate((rotation*Math.PI)/180);
+      ctx.clearRect(0,0,cw,ch);ctx.save();ctx.translate(cx,cy);ctx.rotate(rotation*Math.PI/180);
       const segAngle=2*Math.PI/names.length;
       
-      // Build final color array ensuring uniqueness
-      const finalColors = [];
-      const usedColors = new Set();
+      // Assign colors
+      const finalColors=[],used=new Set();
+      names.forEach((n,i)=>{if(customColors[i]){finalColors[i]=customColors[i];used.add(customColors[i]);}else finalColors[i]=null;});
+      const allColors=[...PALETTE,...COLORS];
+      let cIdx=0;
+      names.forEach((n,i)=>{if(!finalColors[i]){let fc=null;for(let j=0;j<allColors.length*2;j++){const tc=allColors[(cIdx+j)%allColors.length];if(!used.has(tc)){fc=tc;cIdx=(cIdx+j+1)%allColors.length;break;}}finalColors[i]=fc||allColors[i%allColors.length];used.add(finalColors[i]);}});
       
-      names.forEach((name, i) => {
-        if(customColors[i]) {
-          finalColors[i] = customColors[i];
-          usedColors.add(customColors[i]);
-        } else {
-          finalColors[i] = null;
-        }
-      });
-      
-      const allColors = [...COLOR_PALETTE, ...COLORS];
-      let colorIndex = 0;
-      
-      names.forEach((name, i) => {
-        if(!finalColors[i]) {
-          let foundColor = null;
-          for(let j = 0; j < allColors.length * 2; j++) {
-            const testColor = allColors[(colorIndex + j) % allColors.length];
-            if(!usedColors.has(testColor)) {
-              foundColor = testColor;
-              colorIndex = (colorIndex + j + 1) % allColors.length;
-              break;
-            }
-          }
-          if(!foundColor) {
-            foundColor = allColors[i % allColors.length];
-          }
-          finalColors[i] = foundColor;
-          usedColors.add(foundColor);
-        }
-      });
-      
-      // Start with base text size on segment count
-      let baseFontSize;
-      if(names.length <= 3) baseFontSize = r*0.12;
-      else if(names.length <= 4) baseFontSize = r*0.10;
-      else if(names.length <= 6) baseFontSize = r*0.09;
-      else if(names.length <= 8) baseFontSize = r*0.08;
-      else if(names.length <= 12) baseFontSize = r*0.07;
-      else baseFontSize = r*0.06;
+      // Font sizes
+      let baseFont=r*(names.length<=3?0.12:names.length<=4?0.10:names.length<=6?0.09:names.length<=8?0.08:names.length<=12?0.07:0.06);
       
       names.forEach((name,i)=>{
         const start=i*segAngle,end=start+segAngle;
-        ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,r,start,end); ctx.closePath();
+        ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,r,start,end);ctx.closePath();
+        ctx.fillStyle=finalColors[i];ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+        ctx.save();ctx.rotate(start+segAngle/2);ctx.textAlign='center';ctx.fillStyle='#fff';ctx.translate(r*0.6,0);
         
-        ctx.fillStyle=finalColors[i]; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
-        ctx.save(); ctx.rotate(start+segAngle/2); ctx.textAlign='center'; ctx.fillStyle='#fff';
-        ctx.translate(r*0.6,0);
+        const maxW=r*0.7;
+        ctx.font=`bold ${baseFont}px Arial`;
+        const words=name.split(' ');
         
-        // Set font
-        ctx.font=`bold ${baseFontSize}px Arial`;
+        // Scale down if any word too long
+        let font=baseFont,maxWordW=0;
+        words.forEach(w=>{const ww=ctx.measureText(w).width;if(ww>maxWordW)maxWordW=ww;});
+        if(maxWordW>maxW){font=baseFont*(maxW/maxWordW)*0.95;ctx.font=`bold ${font}px Arial`;}
         
-        // Available width for text in the segment
-        const maxWidth = r*0.7;
+        // Build lines
+        const lines=[];
+        let curLine='';
+        words.forEach(w=>{const test=curLine+(curLine?' ':'')+w,tw=ctx.measureText(test).width;if(tw>maxW&&curLine){lines.push(curLine);curLine=w;}else curLine=test;});
+        if(curLine)lines.push(curLine);
         
-        console.log(`\n=== Segment ${i}: "${name}" ===`);
-        console.log(`maxWidth: ${maxWidth}, baseFontSize: ${baseFontSize}`);
-        
-        // Split into words
-        const words = name.split(' ');
-        console.log(`Words:`, words);
-        
-        // Check if any single word is too long and scale down if needed
-        let fontSize = baseFontSize;
-        let longestWordWidth = 0;
-        words.forEach(word => {
-          const wordWidth = ctx.measureText(word).width;
-          if(wordWidth > longestWordWidth) longestWordWidth = wordWidth;
-        });
-        
-        // If longest word doesn't fit, scale font down
-        if(longestWordWidth > maxWidth) {
-          fontSize = baseFontSize * (maxWidth / longestWordWidth) * 0.95; // 0.95 for safety margin
-          ctx.font=`bold ${fontSize}px Arial`;
-          console.log(`  Scaled down font to ${fontSize} because longest word is ${longestWordWidth}px`);
-        }
-        
-        const lines = [];
-        let currentLine = '';
-        
-        // Build lines by adding words until they don't fit
-        for(let w=0; w<words.length; w++) {
-          const testLine = currentLine + (currentLine ? ' ' : '') + words[w];
-          const testWidth = ctx.measureText(testLine).width;
-          
-          console.log(`  Word ${w} "${words[w]}": testLine="${testLine}", width=${testWidth}`);
-          
-          if(testWidth > maxWidth && currentLine !== '') {
-            // Line is full, save it and start new line
-            console.log(`    -> LINE FULL! Saving: "${currentLine}"`);
-            lines.push(currentLine);
-            currentLine = words[w];
-          } else {
-            console.log(`    -> Adding to current line`);
-            currentLine = testLine;
-          }
-        }
-        // Add the last line
-        if(currentLine) {
-          console.log(`  Final line: "${currentLine}"`);
-          lines.push(currentLine);
-        }
-        
-        console.log(`Lines to draw:`, lines);
-        
-        // Draw all lines, vertically centered
-        const lineHeight = fontSize + 4;
-        const totalHeight = lines.length * lineHeight;
-        let startY = -totalHeight / 2 + lineHeight / 2;
-        
-        lines.forEach((line, idx) => {
-          console.log(`  Drawing line ${idx}: "${line}" at y=${startY + (idx * lineHeight)}`);
-          ctx.fillText(line, 0, startY + (idx * lineHeight));
-        });
-        
+        // Draw centered
+        const lh=font+4,th=lines.length*lh,sy=-th/2+lh/2;
+        lines.forEach((ln,idx)=>ctx.fillText(ln,0,sy+idx*lh));
         ctx.restore();
       });
       
       ctx.restore();
       
-      // Draw pointer outside the wheel (Wheel of Fortune style)
-      const pointerSize = 20;
-      ctx.beginPath(); 
-      ctx.moveTo(cx, cy - r + pointerSize*0.3); 
-      ctx.lineTo(cx - pointerSize*0.6, cy - r - pointerSize); 
-      ctx.lineTo(cx + pointerSize*0.6, cy - r - pointerSize); 
-      ctx.closePath(); 
-      ctx.fillStyle='#333'; 
-      ctx.fill();
-      ctx.strokeStyle='#fff';
-      ctx.lineWidth=2;
-      ctx.stroke();
-    }
+      // Pointer
+      const ps=20;
+      ctx.beginPath();ctx.moveTo(cx,cy-r+ps*0.3);ctx.lineTo(cx-ps*0.6,cy-r-ps);ctx.lineTo(cx+ps*0.6,cy-r-ps);ctx.closePath();
+      ctx.fillStyle='#333';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+    };
 
-    function toggleSpin(){if(isSpinning)stopSpin();else startSpin();}
-
-    function startSpin(){
-      if(isSpinning)return;
-      isSpinning=true;
-      updateButton();
-      velocity=20+Math.random()*20;
-      document.getElementById('winnerSpot').innerHTML='';
-      lastSegmentIndex=-1;
-      isStopping=false;
-      if(audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-      animationId=requestAnimationFrame(animate);
-    }
-
-    function stopSpin(){
-      if(!isSpinning){isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;return;}
-      isSpinning=false;
-      updateButton();
-      playStop();
-      isStopping=true;
-      stopStartTime=Date.now();
-      initialStopVelocity=velocity;
-    }
-
-    function animate(){
-      if(isStopping){
-        const t=(Date.now()-stopStartTime)/1000,d=4;
-        if(t<d){
-          const p=t/d,eased=1-Math.pow(1-p,3);
-          velocity=initialStopVelocity*(1-eased);
-          rotation+=velocity*0.5; 
-          checkSegmentCrossing();
-          drawWheel(); 
-          animationId=requestAnimationFrame(animate);
-        }else{
-          isStopping=false; velocity=0; cancelAnim(); pickWinner();
-        }
-      }else if(isSpinning){
-        rotation+=velocity*0.5; 
-        checkSegmentCrossing();
-        drawWheel(); 
-        animationId=requestAnimationFrame(animate);
-      }
-    }
-
-    function cancelAnim(){if(animationId){cancelAnimationFrame(animationId);animationId=null;}}
-
-    function pickWinner(){
-      const segAngleDeg = 360 / names.length;
-      const normalizedRotation = ((rotation % 360) + 360) % 360;
-      const pointerDeg = 270;
-      const relative = ((pointerDeg - normalizedRotation) + 360) % 360;
-      const index = Math.floor(relative / segAngleDeg) % names.length;
-      winner = names[index];
-      document.getElementById('winnerSpot').innerHTML=`<div class="winner">🎉 Winner: ${winner}! 🎉</div>`;
-      playWinner();
-    }
+    const toggleSpin=()=>isSpinning?stopSpin():startSpin();
+    
+    const startSpin=()=>{if(isSpinning)return;isSpinning=true;velocity=20+Math.random()*20;document.getElementById('winner').innerHTML='';lastSegmentIndex=-1;isStopping=false;if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();animationId=requestAnimationFrame(animate);};
+    
+    const stopSpin=()=>{if(!isSpinning){isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;return;}isSpinning=false;playTone([500,400]);isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;};
+    
+    const animate=()=>{if(isStopping){const t=(Date.now()-stopStartTime)/1000;if(t<4){const eased=1-Math.pow(1-t/4,3);velocity=initialStopVelocity*(1-eased);rotation+=velocity*0.5;checkSegment();drawWheel();animationId=requestAnimationFrame(animate);}else{isStopping=false;velocity=0;pickWinner();}}else if(isSpinning){rotation+=velocity*0.5;checkSegment();drawWheel();animationId=requestAnimationFrame(animate);}};
+    
+    const pickWinner=()=>{const idx=Math.floor((((270-((rotation%360)+360)%360)+360)%360)/(360/names.length))%names.length;document.getElementById('winner').innerHTML=`<div class="winner">🎉 Winner: ${names[idx]}! 🎉</div>`;playTone([523,659,784,1047],0.4,0.2);};
 
     render();
   })();
