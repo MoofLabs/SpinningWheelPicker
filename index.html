@@ -87,7 +87,7 @@
     let canvas, ctx, canvasSize=500;
     let isMuted=false, lastSegmentIndex=-1;
     let audioCtx=null;
-    let openColorPicker=-1; // Track which segment's color picker is open
+    let openColorPicker=-1;
     const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2'];
     const COLOR_PALETTE=['#E74C3C','#3498DB','#2ECC71','#FFD700','#9B59B6','#00CED1','#E67E22','#34495E'];
 
@@ -96,14 +96,12 @@
       if(!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-      // Resume if suspended (browser autoplay policy)
       if(audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
       return audioCtx;
     }
 
-    // Sound functions using Web Audio API
     function playTick() {
       if(isMuted) return;
       const ctx = getAudioContext();
@@ -232,12 +230,10 @@
           const idx=+el.dataset.idx;
           currentPickerIndex = idx;
           
-          // Position overlay near the button
           const rect = el.getBoundingClientRect();
           overlay.style.top = `${rect.bottom + 8}px`;
           overlay.style.left = `${Math.max(10, rect.left - 100)}px`;
           
-          // Update selected state in overlay
           overlay.querySelectorAll('.color-swatch-overlay').forEach(swatch => {
             if(swatch.dataset.color === customColors[idx]) {
               swatch.style.border = '2px solid #000';
@@ -260,7 +256,6 @@
           const color=el.dataset.color;
           customColors[currentPickerIndex]=color;
           
-          // Update the color display in the button
           const btn = document.querySelector(`.color-btn[data-idx="${currentPickerIndex}"]`);
           const colorDisplay = btn.querySelector('div');
           colorDisplay.style.background = color;
@@ -340,20 +335,10 @@
       ctx.clearRect(0,0,cw,ch); ctx.save(); ctx.translate(cx,cy); ctx.rotate((rotation*Math.PI)/180);
       const segAngle=2*Math.PI/names.length;
       
-      // Dynamic text size based on number of segments - maximized for readability
-      let fontSize;
-      if(names.length <= 3) fontSize = Math.floor(r*0.16);
-      else if(names.length <= 4) fontSize = Math.floor(r*0.14);
-      else if(names.length <= 6) fontSize = Math.floor(r*0.12);
-      else if(names.length <= 8) fontSize = Math.floor(r*0.10);
-      else if(names.length <= 12) fontSize = Math.floor(r*0.09);
-      else fontSize = Math.floor(r*0.07);
-      
       // Build final color array ensuring uniqueness
       const finalColors = [];
       const usedColors = new Set();
       
-      // First pass: assign custom colors and track them
       names.forEach((name, i) => {
         if(customColors[i]) {
           finalColors[i] = customColors[i];
@@ -363,13 +348,11 @@
         }
       });
       
-      // Second pass: assign unused colors to segments without custom colors
       const allColors = [...COLOR_PALETTE, ...COLORS];
       let colorIndex = 0;
       
       names.forEach((name, i) => {
         if(!finalColors[i]) {
-          // Find next unused color
           let foundColor = null;
           for(let j = 0; j < allColors.length * 2; j++) {
             const testColor = allColors[(colorIndex + j) % allColors.length];
@@ -379,7 +362,6 @@
               break;
             }
           }
-          // If all colors are used, just cycle through
           if(!foundColor) {
             foundColor = allColors[i % allColors.length];
           }
@@ -388,15 +370,92 @@
         }
       });
       
+      // Start with base text size on segment count
+      let baseFontSize;
+      if(names.length <= 3) baseFontSize = r*0.12;
+      else if(names.length <= 4) baseFontSize = r*0.10;
+      else if(names.length <= 6) baseFontSize = r*0.09;
+      else if(names.length <= 8) baseFontSize = r*0.08;
+      else if(names.length <= 12) baseFontSize = r*0.07;
+      else baseFontSize = r*0.06;
+      
       names.forEach((name,i)=>{
         const start=i*segAngle,end=start+segAngle;
         ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,r,start,end); ctx.closePath();
         
         ctx.fillStyle=finalColors[i]; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.stroke();
         ctx.save(); ctx.rotate(start+segAngle/2); ctx.textAlign='center'; ctx.fillStyle='#fff';
-        ctx.font=`bold ${fontSize}px Arial`; ctx.translate(r*0.6,0);
-        wrapText(ctx,name,0,0,r*0.3); ctx.restore();
-      }); 
+        ctx.translate(r*0.6,0);
+        
+        // Set font
+        ctx.font=`bold ${baseFontSize}px Arial`;
+        
+        // Available width for text in the segment
+        const maxWidth = r*0.7;
+        
+        console.log(`\n=== Segment ${i}: "${name}" ===`);
+        console.log(`maxWidth: ${maxWidth}, baseFontSize: ${baseFontSize}`);
+        
+        // Split into words
+        const words = name.split(' ');
+        console.log(`Words:`, words);
+        
+        // Check if any single word is too long and scale down if needed
+        let fontSize = baseFontSize;
+        let longestWordWidth = 0;
+        words.forEach(word => {
+          const wordWidth = ctx.measureText(word).width;
+          if(wordWidth > longestWordWidth) longestWordWidth = wordWidth;
+        });
+        
+        // If longest word doesn't fit, scale font down
+        if(longestWordWidth > maxWidth) {
+          fontSize = baseFontSize * (maxWidth / longestWordWidth) * 0.95; // 0.95 for safety margin
+          ctx.font=`bold ${fontSize}px Arial`;
+          console.log(`  Scaled down font to ${fontSize} because longest word is ${longestWordWidth}px`);
+        }
+        
+        const lines = [];
+        let currentLine = '';
+        
+        // Build lines by adding words until they don't fit
+        for(let w=0; w<words.length; w++) {
+          const testLine = currentLine + (currentLine ? ' ' : '') + words[w];
+          const testWidth = ctx.measureText(testLine).width;
+          
+          console.log(`  Word ${w} "${words[w]}": testLine="${testLine}", width=${testWidth}`);
+          
+          if(testWidth > maxWidth && currentLine !== '') {
+            // Line is full, save it and start new line
+            console.log(`    -> LINE FULL! Saving: "${currentLine}"`);
+            lines.push(currentLine);
+            currentLine = words[w];
+          } else {
+            console.log(`    -> Adding to current line`);
+            currentLine = testLine;
+          }
+        }
+        // Add the last line
+        if(currentLine) {
+          console.log(`  Final line: "${currentLine}"`);
+          lines.push(currentLine);
+        }
+        
+        console.log(`Lines to draw:`, lines);
+        
+        // Draw all lines, vertically centered
+        const lineHeight = fontSize + 4;
+        const totalHeight = lines.length * lineHeight;
+        let startY = -totalHeight / 2 + lineHeight / 2;
+        
+        lines.forEach((line, idx) => {
+          console.log(`  Drawing line ${idx}: "${line}" at y=${startY + (idx * lineHeight)}`);
+          ctx.fillText(line, 0, startY + (idx * lineHeight));
+        });
+        
+        ctx.restore();
+      });
+      
       ctx.restore();
       
       // Draw pointer outside the wheel (Wheel of Fortune style)
@@ -413,8 +472,6 @@
       ctx.stroke();
     }
 
-    function wrapText(ctx,text,x,y,maxWidth){const words=text.split(' ');let line='',lh=parseInt(ctx.font)+2,offsetY=0;for(let n=0;n<words.length;n++){const test=line+words[n]+' ';if(ctx.measureText(test).width>maxWidth&&n>0){ctx.fillText(line,x,y+offsetY);line=words[n]+' ';offsetY+=lh;}else line=test;}ctx.fillText(line.trim(),x,y+offsetY);}
-
     function toggleSpin(){if(isSpinning)stopSpin();else startSpin();}
 
     function startSpin(){
@@ -425,7 +482,6 @@
       document.getElementById('winnerSpot').innerHTML='';
       lastSegmentIndex=-1;
       isStopping=false;
-      // Resume audio context on user interaction
       if(audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
