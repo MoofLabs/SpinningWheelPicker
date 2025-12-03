@@ -68,7 +68,7 @@
         const col=customColors[i]?`<div style="width:28px;height:28px;background:${customColors[i]};border-radius:4px;border:2px solid #333"></div>`:'<div style="width:28px;height:28px;background:#ddd;border-radius:4px;border:2px solid #999"></div>';
         return`<div style="margin-bottom:16px"><label>Segment ${i+1}</label><div style="display:flex;gap:8px;align-items:center"><input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" style="flex:1"/><button class="color-btn" data-idx="${i}" style="padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600">${col}<span>🎨</span></button></div></div>`;
       }).join('');
-      app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="create" class="btn btn-primary">Create</button><button id="back" class="btn btn-gray">Back</button><div class="color-picker-backdrop" id="backdrop"></div><div class="color-picker-overlay" id="overlay"><div style="display:flex;gap:8px">${PALETTE.map(c=>`<div style="width:32px;height:32px;background:${c};border-radius:6px;cursor:pointer;border:2px solid #ddd" data-color="${c}" class="swatch"></div>`).join('')}</div></div>`;
+      app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="create" class="btn btn-primary">Create</button><button id="back" class="btn btn-gray">Back</button><div class="color-picker-backdrop" id="backdrop"></div><div class="color-picker-overlay" id="overlay"><div style="display:flex;gap:8px;flex-wrap:wrap;max-width:300px">${PALETTE.map(c=>`<div style="width:32px;height:32px;background:${c};border-radius:6px;cursor:pointer;border:2px solid #ddd" data-color="${c}" class="swatch"></div>`).join('')}</div></div>`;
       
       document.querySelectorAll('.name-input').forEach(el=>el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim());
       
@@ -77,7 +77,7 @@
       const close=()=>{backdrop.style.display='none';overlay.style.display='none';curIdx=-1;};
       backdrop.onclick=close;
       
-      document.querySelectorAll('.color-btn').forEach(el=>el.onclick=e=>{e.preventDefault();e.stopPropagation();curIdx=+el.dataset.idx;const r=el.getBoundingClientRect();overlay.style.top=`${r.bottom+8}px`;overlay.style.left=`${Math.max(10,r.left-100)}px`;overlay.querySelectorAll('.swatch').forEach(s=>s.style.border=s.dataset.color===customColors[curIdx]?'2px solid #000':'2px solid #ddd');backdrop.style.display='block';overlay.style.display='block';});
+      document.querySelectorAll('.color-btn').forEach(el=>el.onclick=e=>{e.preventDefault();e.stopPropagation();curIdx=+el.dataset.idx;const r=el.getBoundingClientRect();const left=Math.max(10,Math.min(r.left-100,window.innerWidth-300));overlay.style.top=`${r.bottom+8}px`;overlay.style.left=`${left}px`;overlay.querySelectorAll('.swatch').forEach(s=>s.style.border=s.dataset.color===customColors[curIdx]?'2px solid #000':'2px solid #ddd');backdrop.style.display='block';overlay.style.display='block';});
       
       document.querySelectorAll('.swatch').forEach(el=>el.onclick=e=>{e.stopPropagation();if(curIdx===-1)return;customColors[curIdx]=el.dataset.color;const btn=document.querySelector(`.color-btn[data-idx="${curIdx}"]`),cd=btn.querySelector('div');cd.style.background=el.dataset.color;cd.style.border='2px solid #333';close();});
       
