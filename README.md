@@ -1,153 +1,52 @@
-# 🎡 Spinning Wheel Picker
+# Spinning Wheel Picker
 
-A lightweight, installable Progressive Web App for random selection. Built with vanilla JavaScript, HTML5 Canvas, and zero dependencies.
+A simple random name picker that spins a wheel to choose a winner. Runs entirely in the browser with no dependencies -- just one HTML file with embedded CSS and JavaScript.
 
-## 🌐 Live Demo
+**[Try it here](https://mooflabs.github.io/SpinningWheelPicker/)**
 
-**[Launch App](https://mooflabs.github.io/SpinningWheelPicker/)**
+## What it does
 
-*Tip: Add to your home screen for the full app experience!*
+- Create a wheel with 2-20 named segments
+- Optionally pick a color for each segment
+- Press Spin and it picks a winner at random
+- Installable as a PWA on phones and tablets
 
-## ✨ Features
+## How the randomness works
 
-- **Customizable segments**: 2-20 configurable wheel segments
-- **Color picker**: 8-color palette with intelligent color distribution
-- **Dynamic text sizing**: Automatically scales text based on segment count and name length
-- **Multi-line support**: Word wrapping for longer names with spaces
-- **Sound effects**: Audio feedback with mute toggle
-- **Keyboard controls**: Space bar to start/stop spinning
-- **Responsive design**: Adapts to mobile and desktop screens
-- **PWA support**: Installable on mobile devices, works offline
-- **Offline First** - Service worker caches everything after first visit
+The winner is chosen the instant you press Spin, before the wheel even starts moving. The animation is just for show -- it calculates exactly where to land and spins to that spot.
 
-## 📱 Install as an App
+Under the hood it uses `crypto.getRandomValues()` instead of `Math.random()`, which gives cryptographically strong randomness. Every segment has an equal chance of being selected, and there's no way to influence the outcome by timing a "stop" button.
 
-### iOS (iPhone/iPad)
-1. Open the [live demo](https://mooflabs.github.io/SpinningWheelPicker/) in Safari
-2. Tap the Share button
-3. Select "Add to Home Screen"
-4. Enjoy fullscreen app experience!
+The spin duration, number of rotations, and landing position within the winning segment are all independently randomized so the animation looks different every time.
 
-### Android
-1. Open the [live demo](https://mooflabs.github.io/SpinningWheelPicker/) in Chrome
-2. Tap "Install" banner or menu → "Install app"
-3. App icon appears on home screen
+## How to use it
 
-### Desktop
-- Open `index.html` in a web browser
+1. Open the app in a browser or install it on your phone
+2. Enter how many segments you want (2-20)
+3. Type a name for each segment, optionally pick colors
+4. Hit Spin or press the spacebar
+5. Winner is displayed when the wheel stops
 
-## 🎯 How It Works
+## Installing on your phone
 
-### Winner Selection
+**iOS**: Open the link in Safari, tap the Share button, tap "Add to Home Screen."
 
-The wheel uses canvas rotation and trigonometry to determine winners:
+**Android**: Open the link in Chrome, tap the menu, tap "Install app."
 
-1. **Pointer Position**: Fixed at top center (270° in canvas coordinates)
-2. **Segment Calculation**: Each segment occupies `360° / numSegments`
-3. **Winner Algorithm**:
-```javascript
-   // Normalize wheel rotation (0-360°)
-   const normalizedRotation = ((rotation % 360) + 360) % 360;
-   
-   // Calculate pointer's relative position
-   const relative = ((270 - normalizedRotation) + 360) % 360;
-   
-   // Determine winning segment
-   const winnerIndex = Math.floor(relative / segmentAngle) % numSegments;
-```
+It works offline after the first visit.
 
-### Animation Physics
+## Running locally
 
-- **Acceleration**: Random initial velocity (20-40 units)
-- **Deceleration**: 4-second ease-out cubic function
-- **Formula**: `velocity = initialVelocity × (1 - (1 - progress)³)`
+Just open `index.html` in a browser. No build step, no server, no dependencies.
 
-Creates a natural spinning motion that gradually comes to rest.
+## Technical details
 
-### Text Rendering
+- Single HTML file, ~170 lines of JavaScript
+- HTML5 Canvas for rendering
+- Web Audio API for tick sounds (with mute toggle)
+- Service worker for offline caching
+- Web App Manifest for installability
 
-- **Base sizing**: Scales with segment count (fewer segments = larger text)
-- **Per-segment scaling**: Automatically reduces font size for long words
-- **Word wrapping**: Splits multi-word names across lines at word boundaries
-- **Vertical centering**: Multi-line text is centered within each segment
+## License
 
-## 🎨 Customization
-
-### Color Palette
-Edit the `PALETTE` array for custom color picker options:
-```javascript
-const PALETTE = ['#E74C3C', '#3498DB', '#2ECC71', '#FFD700', ...];
-```
-
-Edit the `COLORS` array for default segment colors:
-```javascript
-const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', ...];
-```
-
-### Spin Duration
-Adjust deceleration time (default 4 seconds):
-```javascript
-if(t<4){  // Change 4 to desired seconds
-```
-
-### Background Gradient
-Modify CSS variables in `:root`:
-```css
---bg1: #6b21a8;  /* Purple */
---bg2: #ec4899;  /* Pink */
-```
-
-### Text Sizing
-Adjust base font size multipliers in the `baseFont` calculation:
-```javascript
-let baseFont = r * (
-  names.length <= 3 ? 0.12 :  // Adjust these values
-  names.length <= 4 ? 0.10 :
-  // ...
-);
-```
-
-## 🛠️ Technical Highlights
-
-- **Size**: 172 lines of code
-- **Dependencies**: None
-- **Browser compatibility**: Modern browsers with Canvas and Web Audio API support
-- **Architecture**: Self-contained single HTML file with embedded CSS and JavaScript
-
-## 📋 Usage
-
-1. Open the app (browser or installed)
-2. Enter number of segments (2-20)
-3. Fill in names for each segment (Optional: Pick a Color for that Segment)
-4. Click "Start Spinning" or press spacebar
-5. Winner appears when wheel stops!
-
-
-## 📝 Development
-
-Built with modern web standards:
-- **ES6+ JavaScript** - Arrow functions, template literals, destructuring
-- **HTML5 Canvas** - 2D rendering context for wheel graphics
-- **CSS3** - Flexbox, gradients, transitions
-- **Service Workers** - Cache API for offline functionality
-- **Web App Manifest** - Installability metadata
-
-## 🎓 Learning Resources
-
-This project demonstrates:
-- Canvas animation and drawing
-- Trigonometry for circular layouts
-- Service worker lifecycle
-- PWA best practices
-- Event handling (keyboard, mouse, touch)
-- Responsive design patterns
-
-## 📄 License
-
-Free to use for personal projects. Attribution appreciated.
-
----
-
-**Built using vanilla JavaScript • No frameworks, no build tools, no dependencies**
-
-[View Source](https://github.com/MoofLabs/SpinningWheelPicker) • [Report Issue](https://github.com/MoofLabs/SpinningWheelPicker/issues) • [Live Demo](https://mooflabs.github.io/SpinningWheelPicker/)
+Free to use. Attribution appreciated.

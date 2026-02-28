@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spinning-wheel-v1';
+const CACHE_NAME = 'spinning-wheel-v2';
 const urlsToCache = [
   '/SpinningWheelPicker/',
   '/SpinningWheelPicker/index.html',
@@ -7,44 +7,35 @@ const urlsToCache = [
   '/SpinningWheelPicker/icons/icon-180.png'
 ];
 
-// Install service worker and cache files
+// Install: cache files and take over immediately
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+      .then(cache => cache.addAll(urlsToCache))
   );
 });
 
-// Fetch from cache, fallback to network
+// Activate: delete old caches and claim clients
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(names =>
+      Promise.all(
+        names.filter(n => n !== CACHE_NAME).map(n => caches.delete(n))
+      )
+    ).then(() => self.clients.claim())
+  );
+});
+
+// Fetch: network first, fall back to cache for offline support
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then(response => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      }
-    )
-  );
-});
-
-// Update service worker and clean old caches
-self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

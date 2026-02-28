@@ -6,11 +6,8 @@
   <meta name="description" content="Interactive spinning wheel for random selection. Built with vanilla JavaScript and HTML5 Canvas." />
   <meta name="theme-color" content="#7c3aed" />
   <title>Spinning Wheel Picker - Random Name Selector</title>
-  
-  <!-- PWA Manifest -->
+
   <link rel="manifest" href="manifest.json" />
-  
-  <!-- iOS specific -->
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -29,6 +26,7 @@
     .btn-green { background:#16a34a; color:white; }
     .btn-gray { background:#4b5563; color:white; }
     .btn-mute { background:#f59e0b; color:white; padding:8px 12px; font-size:12px; margin-left:8px; }
+    .btn:disabled { opacity:0.5; cursor:not-allowed; }
     .winner { background:#fbbf24; padding:12px 18px; border-radius:10px; font-weight:800; font-size:18px; margin-top:12px; display:inline-block; }
     .names-container { max-height:400px; overflow-y:auto; margin-bottom:15px; padding-right:5px; }
     .color-picker-overlay { position:fixed; background:white; border-radius:12px; padding:12px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:1000; display:none; }
@@ -40,20 +38,27 @@
   <script>
   (()=>{
     const app=document.getElementById('app');
-    let names=[], customColors=[], isConfiguring=true, isSpinning=false, rotation=0, canvas, ctx, canvasSize=500;
-    let animationId, velocity=0, isStopping=false, stopStartTime, initialStopVelocity, isMuted=false, lastSegmentIndex=-1, audioCtx;
+    let names=[], customColors=[], isConfiguring=true, rotation=0, canvas, ctx, canvasSize=500;
+    let animationId, isAnimating=false, isMuted=false, lastSegmentIndex=-1, audioCtx;
     const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2'];
     const PALETTE=['#E74C3C','#3498DB','#2ECC71','#FFD700','#9B59B6','#00CED1','#E67E22','#34495E'];
+
+    // Cryptographic random: uniform float in [0, 1)
+    const cryptoRandom=()=>{
+      const arr=new Uint32Array(1);
+      crypto.getRandomValues(arr);
+      return arr[0]/4294967296;
+    };
 
     // Audio helpers
     const getAudio=()=>{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();return audioCtx;};
     const playTone=(freqs,dur=0.05,gain=0.15)=>{if(isMuted)return;const ctx=getAudio();freqs.forEach((f,i)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=f;g.gain.setValueAtTime(gain,ctx.currentTime+i*0.1);g.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+i*0.1+dur);o.start(ctx.currentTime+i*0.1);o.stop(ctx.currentTime+i*0.1+dur);});};
-    
-    const checkSegment=()=>{if(!isSpinning&&!isStopping)return;const seg=Math.floor((((270-((rotation%360)+360)%360)+360)%360)/(360/names.length))%names.length;if(seg!==lastSegmentIndex){lastSegmentIndex=seg;playTone([600]);}};
+
+    const checkSegment=()=>{if(!isAnimating)return;const seg=Math.floor((((270-((rotation%360)+360)%360)+360)%360)/(360/names.length))%names.length;if(seg!==lastSegmentIndex){lastSegmentIndex=seg;playTone([600]);}};
 
     // Render functions
     const render=()=>{app.innerHTML='';if(names.length===0)return renderNum();if(isConfiguring)return renderNames();renderWheel();};
-    
+
     const renderNum=()=>{
       app.innerHTML='<h1>Spinning Wheel</h1><label>Segments (2-20)</label><input id="numInput" type="number" min="2" max="20" placeholder="Enter a number"/><button id="next" class="btn btn-primary">Next</button>';
       const inp=document.getElementById('numInput');
@@ -66,99 +71,126 @@
     const renderNames=()=>{
       const rows=names.map((nm,i)=>{
         const col=customColors[i]?`<div style="width:28px;height:28px;background:${customColors[i]};border-radius:4px;border:2px solid #333"></div>`:'<div style="width:28px;height:28px;background:#ddd;border-radius:4px;border:2px solid #999"></div>';
-        return`<div style="margin-bottom:16px"><label>Segment ${i+1}</label><div style="display:flex;gap:8px;align-items:center"><input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" style="flex:1"/><button class="color-btn" data-idx="${i}" style="padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600">${col}<span>🎨</span></button></div></div>`;
+        return`<div style="margin-bottom:16px"><label>Segment ${i+1}</label><div style="display:flex;gap:8px;align-items:center"><input data-idx="${i}" class="name-input" type="text" value="${nm}" placeholder="Name ${i+1}" style="flex:1"/><button class="color-btn" data-idx="${i}" style="padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600">${col}<span>&#x1f3a8;</span></button></div></div>`;
       }).join('');
-      app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="create" class="btn btn-primary">Create</button><button id="back" class="btn btn-gray">Back</button><div class="color-picker-backdrop" id="backdrop"></div><div class="color-picker-overlay" id="overlay"><div style="display:flex;gap:8px;flex-wrap:wrap;max-width:300px">${PALETTE.map(c=>`<div style="width:32px;height:32px;background:${c};border-radius:6px;cursor:pointer;border:2px solid #ddd" data-color="${c}" class="swatch"></div>`).join('')}</div></div>`;
-      
+      app.innerHTML=`<h1>Enter Names</h1><div class="names-container">${rows}</div><button id="create" class="btn btn-primary">Create</button><button id="back" class="btn btn-gray">Back</button><div class="color-picker-backdrop" id="backdrop"></div><div class="color-picker-overlay" id="overlay"><div style="display:flex;gap:8px">${PALETTE.map(c=>`<div style="width:32px;height:32px;background:${c};border-radius:6px;cursor:pointer;border:2px solid #ddd" data-color="${c}" class="swatch"></div>`).join('')}</div></div>`;
+
       document.querySelectorAll('.name-input').forEach(el=>el.oninput=e=>names[+e.target.dataset.idx]=e.target.value.trim());
-      
+
       const backdrop=document.getElementById('backdrop'),overlay=document.getElementById('overlay');
       let curIdx=-1;
       const close=()=>{backdrop.style.display='none';overlay.style.display='none';curIdx=-1;};
       backdrop.onclick=close;
-      
-      document.querySelectorAll('.color-btn').forEach(el=>el.onclick=e=>{e.preventDefault();e.stopPropagation();curIdx=+el.dataset.idx;const r=el.getBoundingClientRect();const left=Math.max(10,Math.min(r.left-100,window.innerWidth-300));overlay.style.top=`${r.bottom+8}px`;overlay.style.left=`${left}px`;overlay.querySelectorAll('.swatch').forEach(s=>s.style.border=s.dataset.color===customColors[curIdx]?'2px solid #000':'2px solid #ddd');backdrop.style.display='block';overlay.style.display='block';});
-      
+
+      document.querySelectorAll('.color-btn').forEach(el=>el.onclick=e=>{e.preventDefault();e.stopPropagation();curIdx=+el.dataset.idx;const r=el.getBoundingClientRect();overlay.style.top=`${r.bottom+8}px`;overlay.style.left=`${Math.max(10,r.left-100)}px`;overlay.querySelectorAll('.swatch').forEach(s=>s.style.border=s.dataset.color===customColors[curIdx]?'2px solid #000':'2px solid #ddd');backdrop.style.display='block';overlay.style.display='block';});
+
       document.querySelectorAll('.swatch').forEach(el=>el.onclick=e=>{e.stopPropagation();if(curIdx===-1)return;customColors[curIdx]=el.dataset.color;const btn=document.querySelector(`.color-btn[data-idx="${curIdx}"]`),cd=btn.querySelector('div');cd.style.background=el.dataset.color;cd.style.border='2px solid #333';close();});
-      
+
       document.getElementById('create').onclick=()=>{if(names.some(n=>!n.trim()))return alert('Fill all names');isConfiguring=false;canvasSize=Math.min(500,window.innerWidth-60);render();};
       document.getElementById('back').onclick=()=>{names=[];customColors=[];render();};
     };
 
     const renderWheel=()=>{
-      app.innerHTML=`<div style="text-align:center"><canvas id="canvas" width="${canvasSize}" height="${canvasSize}" style="max-width:100%"></canvas><div id="winner" style="min-height:50px"></div><div style="margin-top:10px"><button id="spin" class="btn btn-green">${isSpinning?'Stop':'Start'}</button> <button id="reconf" class="btn btn-gray">Reconfigure</button><button id="mute" class="btn btn-mute">${isMuted?'🔇 Unmute':'🔊 Mute'}</button></div><div style="margin-top:8px">Press SPACE</div></div>`;
+      app.innerHTML=`<div style="text-align:center"><canvas id="canvas" width="${canvasSize}" height="${canvasSize}" style="max-width:100%"></canvas><div id="winner" style="min-height:50px"></div><div style="margin-top:10px"><button id="spin" class="btn btn-green">Spin</button> <button id="reconf" class="btn btn-gray">Reconfigure</button><button id="mute" class="btn btn-mute">${isMuted?'Unmute':'Mute'}</button></div><div style="margin-top:8px">Press SPACE to spin</div></div>`;
       canvas=document.getElementById('canvas');ctx=canvas.getContext('2d');drawWheel();
-      document.getElementById('spin').onclick=()=>{toggleSpin();document.getElementById('spin').textContent=isSpinning?'Stop':'Start';};
-      document.getElementById('reconf').onclick=()=>{if(animationId)cancelAnimationFrame(animationId);names=[];customColors=[];render();};
-      document.getElementById('mute').onclick=()=>{isMuted=!isMuted;document.getElementById('mute').textContent=isMuted?'🔇 Unmute':'🔊 Mute';};
-      window.onkeydown=e=>{if(e.code==='Space'&&!isConfiguring){e.preventDefault();toggleSpin();document.getElementById('spin').textContent=isSpinning?'Stop':'Start';}};
+      document.getElementById('spin').onclick=spin;
+      document.getElementById('reconf').onclick=()=>{if(animationId)cancelAnimationFrame(animationId);isAnimating=false;names=[];customColors=[];render();};
+      document.getElementById('mute').onclick=()=>{isMuted=!isMuted;document.getElementById('mute').textContent=isMuted?'Unmute':'Mute';};
+      window.onkeydown=e=>{if(e.code==='Space'&&!isConfiguring){e.preventDefault();spin();}};
     };
 
     const drawWheel=()=>{
       const cw=canvas.width=canvasSize,ch=canvas.height=canvasSize,cx=cw/2,cy=ch/2,r=Math.min(cx,cy)-10;
       ctx.clearRect(0,0,cw,ch);ctx.save();ctx.translate(cx,cy);ctx.rotate(rotation*Math.PI/180);
       const segAngle=2*Math.PI/names.length;
-      
+
       // Assign colors
       const finalColors=[],used=new Set();
       names.forEach((n,i)=>{if(customColors[i]){finalColors[i]=customColors[i];used.add(customColors[i]);}else finalColors[i]=null;});
       const allColors=[...PALETTE,...COLORS];
       let cIdx=0;
       names.forEach((n,i)=>{if(!finalColors[i]){let fc=null;for(let j=0;j<allColors.length*2;j++){const tc=allColors[(cIdx+j)%allColors.length];if(!used.has(tc)){fc=tc;cIdx=(cIdx+j+1)%allColors.length;break;}}finalColors[i]=fc||allColors[i%allColors.length];used.add(finalColors[i]);}});
-      
+
       // Font sizes
       let baseFont=r*(names.length<=3?0.12:names.length<=4?0.10:names.length<=6?0.09:names.length<=8?0.08:names.length<=12?0.07:0.06);
-      
+
       names.forEach((name,i)=>{
         const start=i*segAngle,end=start+segAngle;
         ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,r,start,end);ctx.closePath();
         ctx.fillStyle=finalColors[i];ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
         ctx.save();ctx.rotate(start+segAngle/2);ctx.textAlign='center';ctx.fillStyle='#fff';ctx.translate(r*0.6,0);
-        
+
         const maxW=r*0.7;
         ctx.font=`bold ${baseFont}px Arial`;
         const words=name.split(' ');
-        
-        // Scale down if any word too long
+
         let font=baseFont,maxWordW=0;
         words.forEach(w=>{const ww=ctx.measureText(w).width;if(ww>maxWordW)maxWordW=ww;});
         if(maxWordW>maxW){font=baseFont*(maxW/maxWordW)*0.95;ctx.font=`bold ${font}px Arial`;}
-        
-        // Build lines
+
         const lines=[];
         let curLine='';
         words.forEach(w=>{const test=curLine+(curLine?' ':'')+w,tw=ctx.measureText(test).width;if(tw>maxW&&curLine){lines.push(curLine);curLine=w;}else curLine=test;});
         if(curLine)lines.push(curLine);
-        
-        // Draw centered
+
         const lh=font+4,th=lines.length*lh,sy=-th/2+lh/2;
         lines.forEach((ln,idx)=>ctx.fillText(ln,0,sy+idx*lh));
         ctx.restore();
       });
-      
+
       ctx.restore();
-      
+
       // Pointer
       const ps=20;
       ctx.beginPath();ctx.moveTo(cx,cy-r+ps*0.3);ctx.lineTo(cx-ps*0.6,cy-r-ps);ctx.lineTo(cx+ps*0.6,cy-r-ps);ctx.closePath();
       ctx.fillStyle='#333';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
     };
 
-    const toggleSpin=()=>isSpinning?stopSpin():startSpin();
-    
-    const startSpin=()=>{if(isSpinning)return;isSpinning=true;velocity=20+Math.random()*20;document.getElementById('winner').innerHTML='';lastSegmentIndex=-1;isStopping=false;if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();animationId=requestAnimationFrame(animate);};
-    
-    const stopSpin=()=>{if(!isSpinning){isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;return;}isSpinning=false;playTone([500,400]);isStopping=true;stopStartTime=Date.now();initialStopVelocity=velocity;};
-    
-    const animate=()=>{if(isStopping){const t=(Date.now()-stopStartTime)/1000;if(t<4){const eased=1-Math.pow(1-t/4,3);velocity=initialStopVelocity*(1-eased);rotation+=velocity*0.5;checkSegment();drawWheel();animationId=requestAnimationFrame(animate);}else{isStopping=false;velocity=0;pickWinner();}}else if(isSpinning){rotation+=velocity*0.5;checkSegment();drawWheel();animationId=requestAnimationFrame(animate);}};
-    
-    const pickWinner=()=>{const idx=Math.floor((((270-((rotation%360)+360)%360)+360)%360)/(360/names.length))%names.length;document.getElementById('winner').innerHTML=`<div class="winner">🎉 Winner: ${names[idx]}! 🎉</div>`;playTone([523,659,784,1047],0.4,0.2);};
+    // Spin: pick winner upfront with crypto RNG, animate to land on it
+    const spin=()=>{
+      if(isAnimating)return;
+      isAnimating=true;
+      document.getElementById('winner').innerHTML='';
+      document.getElementById('spin').disabled=true;
+      lastSegmentIndex=-1;
+      if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();
+
+      const winnerIdx=Math.floor(cryptoRandom()*names.length);
+
+      const segDeg=360/names.length;
+      const offsetInSeg=segDeg*(0.1+cryptoRandom()*0.8);
+      const targetAngle=270-winnerIdx*segDeg-offsetInSeg;
+      const currentNorm=((rotation%360)+360)%360;
+      let delta=((targetAngle-currentNorm)%360+360)%360;
+      const extraSpins=5+Math.floor(cryptoRandom()*6);
+      const totalRotation=delta+extraSpins*360;
+
+      const duration=4000+cryptoRandom()*3000;
+      const startRotation=rotation;
+      const startTime=performance.now();
+
+      const animateFrame=(now)=>{
+        const elapsed=now-startTime;
+        const t=Math.min(elapsed/duration,1);
+        const eased=1-Math.pow(1-t,3);
+        rotation=startRotation+totalRotation*eased;
+        checkSegment();
+        drawWheel();
+        if(t<1){
+          animationId=requestAnimationFrame(animateFrame);
+        }else{
+          isAnimating=false;
+          document.getElementById('spin').disabled=false;
+          document.getElementById('winner').innerHTML=`<div class="winner">Winner: ${names[winnerIdx]}!</div>`;
+          playTone([523,659,784,1047],0.4,0.2);
+        }
+      };
+      animationId=requestAnimationFrame(animateFrame);
+    };
 
     render();
   })();
   </script>
-  
-  <!-- Register Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
